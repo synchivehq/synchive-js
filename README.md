@@ -56,3 +56,4 @@ Advanced
 
 - Tokens are stored in `localStorage` using `oidc-client-ts`. Be aware any XSS in your app can expose these tokens.
 - `init()` auto-detects the OAuth redirect callback (by `redirectPath` and presence of `code/state`) and cleans up the URL.
+- Third-party notices are listed in `THIRD_PARTY_NOTICES.md`.
