@@ -15,23 +15,21 @@ import { SyncHiveClient } from "synchive-js-sdk";
 
 const synchive = new SyncHiveClient({
   publishableKey: "sh_publishable_c2hrX2xpdmVf...ODo",
-  autoHandleRedirect: true,
-  redirectPath: "/auth/callback",
 });
 
-// Automatically handles the auth callback
+// Initialize the client (handles auth callbacks automatically)
 await synchive.init();
 
 // Start login
 await synchive.signInRedirect();
 
 // Data helpers
-const products = await synchive.list("SalesOrder", {
+const products = await synchive.list("Product", {
   top: 20,
   skip: 0,
   filter: "Name eq 'Widget'",
 });
-const product = await synchive.get("SalesOrder", "hive-id-123");
+const product = await synchive.get("Product", "D6BFA0AB71A1");
 ```
 
 Most apps only need `init()`, `signInRedirect()`, `list()`, and `get()`.
@@ -47,13 +45,11 @@ Common
 
 Advanced
 
-- `handleRedirectCallback(): Promise<User>`
 - `signOutRedirect(): Promise<void>`
-- `handleSilentCallback(): Promise<void>`
 - `getUser(): Promise<User | null>`
 
 ## Notes
 
 - Tokens are stored in `localStorage` using `oidc-client-ts`. Be aware any XSS in your app can expose these tokens.
-- `init()` auto-detects the OAuth redirect callback (by `redirectPath` and presence of `code/state`) and cleans up the URL.
+- `init()` auto-detects the OAuth redirect callback (by presence of `code/state`) and cleans up the URL.
 - Third-party notices are listed in `THIRD_PARTY_NOTICES.md`.

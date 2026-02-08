@@ -19,7 +19,4 @@ export type SynchiveClientOptions = {
   fetch?: FetchLike;
   buildListUrl?: (shape: string, params: ListParams | undefined, baseUrl: string) => string;
   buildGetUrl?: (shape: string, hiveId: string, baseUrl: string) => string;
-  autoHandleRedirect?: boolean;
-  redirectPath?: string;
-  silentRedirectPath?: string;
 };

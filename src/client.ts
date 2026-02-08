@@ -57,7 +57,6 @@ export class SyncHiveClient {
   private readonly buildListUrl: SynchiveClientOptions["buildListUrl"];
   private readonly buildGetUrl: SynchiveClientOptions["buildGetUrl"];
   private readonly userManager: UserManager;
-  private readonly redirectPath?: string;
 
   constructor(options: SynchiveClientOptions) {
     const publishableKey = options.publishableKey?.trim();
@@ -93,11 +92,6 @@ export class SyncHiveClient {
     this.fetchFn = options.fetch ?? getDefaultFetch();
     this.buildListUrl = options.buildListUrl ?? defaultBuildListUrl;
     this.buildGetUrl = options.buildGetUrl ?? defaultBuildGetUrl;
-    this.redirectPath = options.redirectPath;
-
-    if (options.autoHandleRedirect) {
-      void this.init();
-    }
   }
 
   async init(): Promise<void> {
@@ -110,16 +104,8 @@ export class SyncHiveClient {
     await this.userManager.signinRedirect();
   }
 
-  async handleRedirectCallback(): Promise<User> {
-    return this.userManager.signinRedirectCallback();
-  }
-
   async signOutRedirect(): Promise<void> {
     await this.userManager.signoutRedirect();
-  }
-
-  async handleSilentCallback(): Promise<void> {
-    await this.userManager.signinSilentCallback();
   }
 
   async getUser(): Promise<User | null> {
@@ -187,10 +173,6 @@ export class SyncHiveClient {
     if (typeof window === "undefined") return false;
     if (!window.location) return false;
 
-    if (this.redirectPath && window.location.pathname !== this.redirectPath) {
-      return false;
-    }
-
     const params = new URLSearchParams(window.location.search);
     return params.has("code") || params.has("state");
   }
@@ -204,6 +186,10 @@ export class SyncHiveClient {
     url.searchParams.delete("state");
     url.searchParams.delete("session_state");
     window.history.replaceState({}, document.title, url.toString());
+  }
+
+  private async handleRedirectCallback(): Promise<User> {
+    return this.userManager.signinRedirectCallback();
   }
 }
 
@@ -275,9 +261,8 @@ const resolveAuthSettings = (input: {
     throw new Error("publishableKey auth requires a browser environment.");
   }
 
-  const redirectPath = input.options.redirectPath ?? "/auth/callback";
-  const silentRedirectPath =
-    input.options.silentRedirectPath ?? "/auth/silent-renew";
+  const redirectPath = "/auth/callback";
+  const silentRedirectPath = "/auth/silent-renew";
   const authority = `https://auth.${input.derived.environment}.synchive.com/`;
 
   const defaults: UserManagerSettings = {
