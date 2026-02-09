@@ -6,7 +6,19 @@ export type ListParams = {
   filter?: string;
 };
 
-export type ListResult<T> = T[] | { value: T[]; [key: string]: unknown };
+export type ShapeRecord = Record<string, unknown>;
+
+export type Pagination = {
+  totalItems?: number;
+  totalPages?: number;
+  pageNumber?: number;
+  pageSize?: number;
+};
+
+export type ListResult<T = ShapeRecord> = {
+  shapes: T[];
+  pagination: Pagination;
+};
 
 export type FetchLike = typeof fetch;
 

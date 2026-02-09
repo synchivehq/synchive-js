@@ -50,7 +50,7 @@ Common
 
 - `init(): Promise<void>`
 - `signInRedirect(): Promise<void>`
-- `list<T>(shape: string, params?: { top?: number; skip?: number; filter?: string }): Promise<T[] | { value: T[] }>`
+- `list<T>(shape: string, params?: { top?: number; skip?: number; filter?: string }): Promise<{ shapes: T[]; pagination: { totalItems?: number; totalPages?: number; pageNumber?: number; pageSize?: number } }>`
 - `get<T>(shape: string, hiveId: string): Promise<T>`
 
 Advanced
