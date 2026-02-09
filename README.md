@@ -25,8 +25,19 @@ try {
   console.error("Auth failed:", error);
 }
 
-// Start login
-await synchive.signInRedirect();
+// Simple logged-in / logged-out UI logic
+const user = await synchive.getUser();
+const isLoggedIn = !!user && !user.expired;
+
+if (isLoggedIn) {
+  // Render logged-in UI
+  // Example:
+  // onSignOutClick -> await synchive.signOutRedirect();
+} else {
+  // Render logged-out UI with a Sign In action
+  // Example:
+  // onSignInClick -> await synchive.signInRedirect();
+}
 
 // Data helpers
 try {
