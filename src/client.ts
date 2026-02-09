@@ -112,7 +112,6 @@ export class SyncHiveClient {
     return this.userManager.getUser();
   }
 
-
   async list<T>(shape: string, params?: ListParams): Promise<ListResult<T>> {
     const url =
       this.buildListUrl?.(shape, params, this.apiBaseUrl) ??

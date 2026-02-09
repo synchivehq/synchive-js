@@ -18,18 +18,28 @@ const synchive = new SyncHiveClient({
 });
 
 // Initialize the client (handles auth callbacks automatically)
-await synchive.init();
+try {
+  await synchive.init();
+} catch (error) {
+  // Surface sign-in callback errors to the user
+  console.error("Auth failed:", error);
+}
 
 // Start login
 await synchive.signInRedirect();
 
 // Data helpers
-const products = await synchive.list("Product", {
-  top: 20,
-  skip: 0,
-  filter: "Name eq 'Widget'",
-});
-const product = await synchive.get("Product", "D6BFA0AB71A1");
+try {
+  const products = await synchive.list("Product", {
+    top: 20,
+    skip: 0,
+    filter: "Name eq 'Widget'",
+  });
+  const product = await synchive.get("Product", "D6BFA0AB71A1");
+} catch (error) {
+  // Surface data errors to the user
+  console.error("Data load failed:", error);
+}
 ```
 
 Most apps only need `init()`, `signInRedirect()`, `list()`, and `get()`.
@@ -51,5 +61,5 @@ Advanced
 ## Notes
 
 - Tokens are stored in `localStorage` using `oidc-client-ts`. Be aware any XSS in your app can expose these tokens.
-- `init()` auto-detects the OAuth redirect callback (by presence of `code/state`) and cleans up the URL.
+- `init()` runs only on the sign-in callback and throws if the sign-in failed. Wrap it in `try/catch` to show a user-friendly message.
 - Third-party notices are listed in `THIRD_PARTY_NOTICES.md`.
