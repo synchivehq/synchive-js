@@ -1,6 +1,6 @@
 # SyncHive JS SDK
 
-JavaScript SDK for authenticating and communicating securely with the SyncHive.
+JavaScript SDK for authenticating and communicating securely with SyncHive.
 
 ## Install
 
