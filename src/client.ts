@@ -260,18 +260,13 @@ const resolveAuthSettings = (input: {
     throw new Error("publishableKey auth requires a browser environment.");
   }
 
-  const redirectPath = "/auth/callback";
-  const silentRedirectPath = "/auth/silent-renew";
-  const authority = `https://auth.${input.derived.environment}.synchive.com/`;
+  const authority = `https://apis.${input.derived.environment}.synchive.com/`;
 
   const defaults: UserManagerSettings = {
     authority,
     client_id: input.publishableKey,
-    redirect_uri: new URL(redirectPath, window.location.origin).toString(),
-    silent_redirect_uri: new URL(
-      silentRedirectPath,
-      window.location.origin,
-    ).toString(),
+    redirect_uri: new URL(window.location.origin).toString(),
+    silent_redirect_uri: new URL(window.location.origin).toString(),
     response_type: "code",
     scope: "openid profile offline_access",
   };
