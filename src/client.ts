@@ -260,7 +260,7 @@ const resolveAuthSettings = (input: {
     throw new Error("publishableKey auth requires a browser environment.");
   }
 
-  const authority = `https://apis.${input.derived.environment}.synchive.com/`;
+  const authority = `https://apis.${input.derived.environment}.synchive.com/v1/auth/`;
 
   const defaults: UserManagerSettings = {
     authority,
