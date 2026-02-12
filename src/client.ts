@@ -29,6 +29,7 @@ const defaultBuildListUrl = (
   if (params?.skip !== undefined)
     url.searchParams.set("skip", String(params.skip));
   if (params?.filter) url.searchParams.set("filter", params.filter);
+  if (params?.orderby) url.searchParams.set("orderby", params.orderby);
   return url.toString();
 };
 

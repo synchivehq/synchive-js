@@ -4,6 +4,7 @@ export type ListParams = {
   top?: number;
   skip?: number;
   filter?: string;
+  orderby?: string;
 };
 
 export type ShapeRecord = Record<string, unknown>;

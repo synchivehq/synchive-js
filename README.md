@@ -45,6 +45,7 @@ try {
     top: 20,
     skip: 0,
     filter: "name eq 'Two-Slice Toaster'",
+    orderby: "createdOn desc,name asc",
   });
   const product = await synchive.get("Product", "D6BFA0AB71A1");
   const created = await synchive.create("Product", {
@@ -68,7 +69,7 @@ Common
 
 - `init(): Promise<void>`
 - `signInRedirect(): Promise<void>`
-- `list<T>(shape: string, params?: { top?: number; skip?: number; filter?: string }): Promise<{ shapes: T[]; pagination: { totalItems?: number; totalPages?: number; pageNumber?: number; pageSize?: number } }>`
+- `list<T>(shape: string, params?: { top?: number; skip?: number; filter?: string; orderby?: string }): Promise<{ shapes: T[]; pagination: { totalItems?: number; totalPages?: number; pageNumber?: number; pageSize?: number } }>`
 - `get<T>(shape: string, hiveId: string): Promise<T>`
 - `create<T>(shape: string, payload: T): Promise<T>`
 - `update<T>(shape: string, hiveId: string, payload: Partial<T> | T): Promise<T>`
