@@ -49,10 +49,10 @@ try {
   const product = await synchive.get("Product", "D6BFA0AB71A1");
   const created = await synchive.create("Product", {
     name: "Two-Slice Toaster",
-    price: 19.99,
+    sku: "TOASTER-2S-BLK",
   });
   const updated = await synchive.update("Product", "D6BFA0AB71A1", {
-    price: 24.99,
+    status: "discontinued",
   });
 } catch (error) {
   // Surface data errors to the user
