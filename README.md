@@ -44,16 +44,23 @@ try {
   const products = await synchive.list("Product", {
     top: 20,
     skip: 0,
-    filter: "Name eq 'Widget'",
+    filter: "name eq 'Two-Slice Toaster'",
   });
   const product = await synchive.get("Product", "D6BFA0AB71A1");
+  const created = await synchive.create("Product", {
+    name: "Two-Slice Toaster",
+    price: 19.99,
+  });
+  const updated = await synchive.update("Product", "D6BFA0AB71A1", {
+    price: 24.99,
+  });
 } catch (error) {
   // Surface data errors to the user
   console.error("Data load failed:", error);
 }
 ```
 
-Most apps only need `init()`, `signInRedirect()`, `list()`, and `get()`.
+Most apps only need `init()`, `signInRedirect()`, `list()`, `get()`, `create()`, and `update()`.
 
 ## Helpers
 
@@ -63,6 +70,8 @@ Common
 - `signInRedirect(): Promise<void>`
 - `list<T>(shape: string, params?: { top?: number; skip?: number; filter?: string }): Promise<{ shapes: T[]; pagination: { totalItems?: number; totalPages?: number; pageNumber?: number; pageSize?: number } }>`
 - `get<T>(shape: string, hiveId: string): Promise<T>`
+- `create<T>(shape: string, payload: T): Promise<T>`
+- `update<T>(shape: string, hiveId: string, payload: Partial<T> | T): Promise<T>`
 
 Advanced
 

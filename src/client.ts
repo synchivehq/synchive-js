@@ -40,6 +40,18 @@ const defaultBuildGetUrl = (
   return `${normalizeBaseUrl(baseUrl)}/${encodeURIComponent(shape)}/${encodeURIComponent(hiveId)}`;
 };
 
+const defaultBuildCreateUrl = (shape: string, baseUrl: string): string => {
+  return `${normalizeBaseUrl(baseUrl)}/${encodeURIComponent(shape)}`;
+};
+
+const defaultBuildUpdateUrl = (
+  shape: string,
+  hiveId: string,
+  baseUrl: string,
+): string => {
+  return `${normalizeBaseUrl(baseUrl)}/${encodeURIComponent(shape)}/${encodeURIComponent(hiveId)}`;
+};
+
 const getDefaultStorage = (): Storage | undefined => {
   if (typeof window === "undefined") return undefined;
   if (window.localStorage) return window.localStorage;
@@ -56,6 +68,8 @@ export class SyncHiveClient {
   private readonly fetchFn: FetchLike;
   private readonly buildListUrl: SynchiveClientOptions["buildListUrl"];
   private readonly buildGetUrl: SynchiveClientOptions["buildGetUrl"];
+  private readonly buildCreateUrl: SynchiveClientOptions["buildCreateUrl"];
+  private readonly buildUpdateUrl: SynchiveClientOptions["buildUpdateUrl"];
   private readonly userManager: UserManager;
 
   constructor(options: SynchiveClientOptions) {
@@ -92,6 +106,8 @@ export class SyncHiveClient {
     this.fetchFn = options.fetch ?? getDefaultFetch();
     this.buildListUrl = options.buildListUrl ?? defaultBuildListUrl;
     this.buildGetUrl = options.buildGetUrl ?? defaultBuildGetUrl;
+    this.buildCreateUrl = options.buildCreateUrl ?? defaultBuildCreateUrl;
+    this.buildUpdateUrl = options.buildUpdateUrl ?? defaultBuildUpdateUrl;
   }
 
   async init(): Promise<void> {
@@ -124,6 +140,30 @@ export class SyncHiveClient {
       this.buildGetUrl?.(shape, hiveId, this.apiBaseUrl) ??
       defaultBuildGetUrl(shape, hiveId, this.apiBaseUrl);
     return this.request<T>(url);
+  }
+
+  async create<T>(shape: string, payload: T): Promise<T> {
+    const url =
+      this.buildCreateUrl?.(shape, this.apiBaseUrl) ??
+      defaultBuildCreateUrl(shape, this.apiBaseUrl);
+    return this.request<T>(url, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async update<T>(
+    shape: string,
+    hiveId: string,
+    payload: Partial<T> | T,
+  ): Promise<T> {
+    const url =
+      this.buildUpdateUrl?.(shape, hiveId, this.apiBaseUrl) ??
+      defaultBuildUpdateUrl(shape, hiveId, this.apiBaseUrl);
+    return this.request<T>(url, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
   }
 
   private async request<T>(url: string, init: RequestInit = {}): Promise<T> {
