@@ -218,8 +218,36 @@ export class SyncHiveClient {
     if (typeof window === "undefined") return false;
     if (!window.location) return false;
 
+    const params = this.getAuthParamsFromLocation();
+    return (
+      params.has("code") ||
+      params.has("state") ||
+      params.has("error") ||
+      params.has("id_token")
+    );
+  }
+
+  private getAuthParamsFromLocation(): URLSearchParams {
+    if (typeof window === "undefined") return new URLSearchParams();
+
     const params = new URLSearchParams(window.location.search);
-    return params.has("code") || params.has("state");
+    if (params.toString()) return params;
+
+    const hash = window.location.hash;
+    if (!hash) return params;
+
+    const hashValue = hash.startsWith("#") ? hash.slice(1) : hash;
+    const queryIndex = hashValue.indexOf("?");
+    if (queryIndex >= 0) {
+      return new URLSearchParams(hashValue.slice(queryIndex + 1));
+    }
+
+    // Some providers/router stacks put auth params directly in the hash fragment.
+    if (hashValue.includes("code=") || hashValue.includes("state=")) {
+      return new URLSearchParams(hashValue);
+    }
+
+    return params;
   }
 
   private isInIframe(): boolean {
@@ -280,6 +308,40 @@ export class SyncHiveClient {
     url.searchParams.delete("code");
     url.searchParams.delete("state");
     url.searchParams.delete("session_state");
+    url.searchParams.delete("error");
+    url.searchParams.delete("error_description");
+
+    const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+    if (hash) {
+      const queryIndex = hash.indexOf("?");
+      if (queryIndex >= 0) {
+        const route = hash.slice(0, queryIndex);
+        const hashParams = new URLSearchParams(hash.slice(queryIndex + 1));
+        hashParams.delete("code");
+        hashParams.delete("state");
+        hashParams.delete("session_state");
+        hashParams.delete("error");
+        hashParams.delete("error_description");
+        const cleaned = hashParams.toString();
+        url.hash = route
+          ? cleaned
+            ? `#${route}?${cleaned}`
+            : `#${route}`
+          : cleaned
+            ? `#${cleaned}`
+            : "";
+      } else if (hash.includes("=")) {
+        const hashParams = new URLSearchParams(hash);
+        hashParams.delete("code");
+        hashParams.delete("state");
+        hashParams.delete("session_state");
+        hashParams.delete("error");
+        hashParams.delete("error_description");
+        const cleaned = hashParams.toString();
+        url.hash = cleaned ? `#${cleaned}` : "";
+      }
+    }
+
     window.history.replaceState({}, document.title, url.toString());
   }
 
