@@ -5,13 +5,13 @@ JavaScript SDK for authenticating and communicating securely with SyncHive.
 ## Install
 
 ```bash
-npm install synchive-js-sdk
+npm install @synchive/synchive-js-sdk
 ```
 
 ## Usage
 
 ```ts
-import { SyncHiveClient } from "synchive-js-sdk";
+import { SyncHiveClient } from "@synchive/synchive-js-sdk";
 
 const synchive = new SyncHiveClient({
   publishableKey: "sh_publishable_c2hrX2xpdmVf...ODo",
