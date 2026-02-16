@@ -1,5 +1,5 @@
 {
-  "name": "synchive-js-sdk",
+  "name": "@synchive/synchive-js-sdk",
   "version": "0.1.0",
   "description": "SyncHive JS SDK",
   "license": "MIT",
@@ -21,6 +21,9 @@
     "LICENSES/Apache-2.0.txt",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "rimraf dist && rollup -c",
     "dev": "rollup -c -w",
