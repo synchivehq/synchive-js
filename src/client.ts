@@ -113,12 +113,17 @@ export class SyncHiveClient {
 
   async init(): Promise<void> {
     if (!this.isRedirectCallback()) return;
-    await this.handleRedirectCallback();
+    await this.handleAuthCallback();
     this.clearAuthParamsFromUrl();
   }
 
   async signInRedirect(): Promise<void> {
-    await this.userManager.signinRedirect();
+    if (this.isInIframe()) {
+      await this.signInWithPopupOrRedirectFallback();
+      return;
+    }
+
+    await this.signInWithRedirect();
   }
 
   async signOutRedirect(): Promise<void> {
@@ -217,6 +222,56 @@ export class SyncHiveClient {
     return params.has("code") || params.has("state");
   }
 
+  private isInIframe(): boolean {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.self !== window.top;
+    } catch {
+      // Cross-origin access can throw, which still means "framed".
+      return true;
+    }
+  }
+
+  private async signInWithPopupOrRedirectFallback(): Promise<void> {
+    try {
+      await this.userManager.signinPopup();
+      return;
+    } catch (error) {
+      if (!this.shouldFallbackFromPopup(error)) {
+        throw error;
+      }
+    }
+
+    await this.signInWithRedirect();
+  }
+
+  private shouldFallbackFromPopup(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+    const message = error.message.toLowerCase();
+    return (
+      message.includes("popup") ||
+      message.includes("window closed") ||
+      message.includes("window.open returned null")
+    );
+  }
+
+  private async signInWithRedirect(): Promise<void> {
+    const isIframe = typeof window !== "undefined" && this.isInIframe();
+    try {
+      await this.userManager.signinRedirect({
+        redirectTarget: isIframe ? "top" : "self",
+        redirectMethod: "assign",
+      });
+    } catch {
+      if (isIframe) {
+        throw new Error(
+          "Embedded login blocked by frame policy. Popup auth failed and top-level navigation is not allowed in this iframe.",
+        );
+      }
+      throw new Error("Sign-in redirect failed.");
+    }
+  }
+
   private clearAuthParamsFromUrl(): void {
     if (typeof window === "undefined") return;
     if (!window.history?.replaceState) return;
@@ -228,8 +283,8 @@ export class SyncHiveClient {
     window.history.replaceState({}, document.title, url.toString());
   }
 
-  private async handleRedirectCallback(): Promise<User> {
-    return this.userManager.signinRedirectCallback();
+  private async handleAuthCallback(): Promise<void> {
+    await this.userManager.signinCallback();
   }
 }
 
