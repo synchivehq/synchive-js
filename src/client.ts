@@ -112,9 +112,21 @@ export class SyncHiveClient {
   }
 
   async init(): Promise<void> {
-    if (!this.isRedirectCallback()) return;
-    await this.handleAuthCallback();
-    this.clearAuthParamsFromUrl();
+    const hasCallbackParams = this.isRedirectCallback();
+    const isPopupWindow = this.isPopupContext();
+    if (!hasCallbackParams && !isPopupWindow) return;
+
+    try {
+      await this.handleAuthCallback();
+      if (hasCallbackParams) {
+        this.clearAuthParamsFromUrl();
+      }
+    } catch (error) {
+      // Popup callback pages can lose URL params in some preview/router setups.
+      // In that case, ignore missing-state errors and let the host app continue.
+      if (isPopupWindow && this.isMissingCallbackStateError(error)) return;
+      throw error;
+    }
   }
 
   async signInRedirect(): Promise<void> {
@@ -258,6 +270,21 @@ export class SyncHiveClient {
       // Cross-origin access can throw, which still means "framed".
       return true;
     }
+  }
+
+  private isPopupContext(): boolean {
+    if (typeof window === "undefined") return false;
+    return !!window.opener && window.opener !== window;
+  }
+
+  private isMissingCallbackStateError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+    const message = error.message.toLowerCase();
+    return (
+      message.includes("no state in response") ||
+      message.includes("state not found in storage") ||
+      message.includes("invalid response_type in state")
+    );
   }
 
   private async signInWithPopupOrRedirectFallback(): Promise<void> {
