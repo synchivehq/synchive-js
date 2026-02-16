@@ -123,8 +123,11 @@ export class SyncHiveClient {
       }
     } catch (error) {
       // Popup callback pages can lose URL params in some preview/router setups.
-      // In that case, ignore missing-state errors and let the host app continue.
-      if (isPopupWindow && this.isMissingCallbackStateError(error)) return;
+      // In that case, best effort close so users are not left on a stale popup UI.
+      if (isPopupWindow && this.isMissingCallbackStateError(error)) {
+        window.close();
+        return;
+      }
       throw error;
     }
   }
@@ -373,6 +376,11 @@ export class SyncHiveClient {
   }
 
   private async handleAuthCallback(): Promise<void> {
+    if (this.isPopupContext()) {
+      await this.userManager.signinPopupCallback();
+      return;
+    }
+
     await this.userManager.signinCallback();
   }
 }
