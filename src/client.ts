@@ -115,7 +115,13 @@ export class SyncHiveClient {
     const hasCallbackParams = this.isRedirectCallback();
     const isSignOutCallback = hasCallbackParams && this.isSignOutRedirectCallback();
     const isPopupWindow = this.isPopupContext();
-    if (!hasCallbackParams && !isPopupWindow) return;
+    if (!hasCallbackParams) {
+      if (isPopupWindow) {
+        // Popup callback windows without auth params are effectively done/stale.
+        window.close();
+      }
+      return;
+    }
 
     try {
       await this.handleAuthCallback(isSignOutCallback);
@@ -296,12 +302,16 @@ export class SyncHiveClient {
 
   private isMissingCallbackStateError(error: unknown): boolean {
     if (!(error instanceof Error)) return false;
-    const message = error.message.toLowerCase();
-    return (
-      message.includes("no state in response") ||
-      message.includes("state not found in storage") ||
-      message.includes("invalid response_type in state")
-    );
+    const message = error.message.toLowerCase().replace(/\s+/g, " ").trim();
+
+    const knownStateErrors = [
+      "no state in response",
+      "no matching state found in storage",
+      "state not found in storage",
+      "invalid response_type in state",
+    ];
+
+    return knownStateErrors.some((text) => message.includes(text));
   }
 
   private async signInWithPopupOrRedirectFallback(): Promise<void> {
