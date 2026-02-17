@@ -67,10 +67,6 @@ const getDefaultFetch = (): FetchLike => {
 export class SyncHiveClient {
   private readonly apiBaseUrl: string;
   private readonly fetchFn: FetchLike;
-  private readonly buildListUrl: SynchiveClientOptions["buildListUrl"];
-  private readonly buildGetUrl: SynchiveClientOptions["buildGetUrl"];
-  private readonly buildCreateUrl: SynchiveClientOptions["buildCreateUrl"];
-  private readonly buildUpdateUrl: SynchiveClientOptions["buildUpdateUrl"];
   private readonly userManager: UserManager;
 
   constructor(options: SynchiveClientOptions) {
@@ -105,10 +101,6 @@ export class SyncHiveClient {
     this.userManager = new UserManager(auth);
     this.apiBaseUrl = apiBaseUrl;
     this.fetchFn = options.fetch ?? getDefaultFetch();
-    this.buildListUrl = options.buildListUrl ?? defaultBuildListUrl;
-    this.buildGetUrl = options.buildGetUrl ?? defaultBuildGetUrl;
-    this.buildCreateUrl = options.buildCreateUrl ?? defaultBuildCreateUrl;
-    this.buildUpdateUrl = options.buildUpdateUrl ?? defaultBuildUpdateUrl;
   }
 
   async init(): Promise<void> {
@@ -157,23 +149,17 @@ export class SyncHiveClient {
   }
 
   async list<T>(shape: string, params?: ListParams): Promise<ListResult<T>> {
-    const url =
-      this.buildListUrl?.(shape, params, this.apiBaseUrl) ??
-      defaultBuildListUrl(shape, params, this.apiBaseUrl);
+    const url = defaultBuildListUrl(shape, params, this.apiBaseUrl);
     return this.request<ListResult<T>>(url);
   }
 
   async get<T>(shape: string, hiveId: string): Promise<T> {
-    const url =
-      this.buildGetUrl?.(shape, hiveId, this.apiBaseUrl) ??
-      defaultBuildGetUrl(shape, hiveId, this.apiBaseUrl);
+    const url = defaultBuildGetUrl(shape, hiveId, this.apiBaseUrl);
     return this.request<T>(url);
   }
 
   async create<T>(shape: string, payload: T): Promise<T> {
-    const url =
-      this.buildCreateUrl?.(shape, this.apiBaseUrl) ??
-      defaultBuildCreateUrl(shape, this.apiBaseUrl);
+    const url = defaultBuildCreateUrl(shape, this.apiBaseUrl);
     return this.request<T>(url, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -185,9 +171,7 @@ export class SyncHiveClient {
     hiveId: string,
     payload: Partial<T> | T,
   ): Promise<T> {
-    const url =
-      this.buildUpdateUrl?.(shape, hiveId, this.apiBaseUrl) ??
-      defaultBuildUpdateUrl(shape, hiveId, this.apiBaseUrl);
+    const url = defaultBuildUpdateUrl(shape, hiveId, this.apiBaseUrl);
     return this.request<T>(url, {
       method: "PATCH",
       body: JSON.stringify(payload),
