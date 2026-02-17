@@ -267,11 +267,11 @@ export class SyncHiveClient {
 
   private async ensureUser(): Promise<User> {
     const user = await this.userManager.getUser();
-    if (user && !user.expired) return user;
+    if (this.isAuthenticatedUser(user)) return user;
 
     try {
       const renewed = await this.userManager.signinSilent();
-      if (renewed && !renewed.expired) return renewed;
+      if (this.isAuthenticatedUser(renewed)) return renewed;
     } catch {
       // Silent renew can fail for expected reasons (expired OP session, blocked cookies).
     }
@@ -280,7 +280,7 @@ export class SyncHiveClient {
   }
 
   private toAuthState(user: User | null): AuthState {
-    const activeUser = user && !user.expired ? user : null;
+    const activeUser = this.isAuthenticatedUser(user) ? user : null;
     return {
       user: activeUser,
       isAuthenticated: !!activeUser,
@@ -288,7 +288,16 @@ export class SyncHiveClient {
   }
 
   private toAuthStateChangeTrigger(user: User | null): AuthStateChangeTrigger {
-    return user && !user.expired ? "authenticated" : "unauthenticated";
+    return this.isAuthenticatedUser(user)
+      ? "authenticated"
+      : "unauthenticated";
+  }
+
+  private isAuthenticatedUser(user: User | null): user is User {
+    if (!user) return false;
+    if (user.expired === true) return false;
+    if (typeof user.access_token !== "string") return false;
+    return user.access_token.trim().length > 0;
   }
 
   private isRedirectCallback(): boolean {
