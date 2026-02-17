@@ -82,6 +82,6 @@ Advanced
 ## Notes
 
 - Tokens are stored in `localStorage` using `oidc-client-ts`. Be aware any XSS in your app can expose these tokens.
-- `init()` runs only on the sign-in callback and throws if the sign-in failed. Wrap it in `try/catch` to show a user-friendly message.
+- `init()` runs on sign-in and sign-out callbacks and throws if callback handling fails. Wrap it in `try/catch` to show a user-friendly message.
 - If this SDK is run within an iframe, authentication uses a popup because many identity providers block login pages inside frames (`X-Frame-Options` / `frame-ancestors`). If popups are blocked, the SDK attempts to continue by redirecting the top-level page; if that is also blocked by the host iframe/browser policy, authentication fails with an explicit error.
 - Third-party notices are listed in `THIRD_PARTY_NOTICES.md`.

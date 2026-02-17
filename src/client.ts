@@ -113,11 +113,12 @@ export class SyncHiveClient {
 
   async init(): Promise<void> {
     const hasCallbackParams = this.isRedirectCallback();
+    const isSignOutCallback = hasCallbackParams && this.isSignOutRedirectCallback();
     const isPopupWindow = this.isPopupContext();
     if (!hasCallbackParams && !isPopupWindow) return;
 
     try {
-      await this.handleAuthCallback();
+      await this.handleAuthCallback(isSignOutCallback);
       if (hasCallbackParams) {
         this.clearAuthParamsFromUrl();
       }
@@ -239,6 +240,19 @@ export class SyncHiveClient {
       params.has("state") ||
       params.has("error") ||
       params.has("id_token")
+    );
+  }
+
+  private isSignOutRedirectCallback(): boolean {
+    if (typeof window === "undefined") return false;
+    if (!window.location) return false;
+
+    const params = this.getAuthParamsFromLocation();
+    return (
+      params.has("state") &&
+      !params.has("code") &&
+      !params.has("id_token") &&
+      !params.has("error")
     );
   }
 
@@ -375,7 +389,13 @@ export class SyncHiveClient {
     window.history.replaceState({}, document.title, url.toString());
   }
 
-  private async handleAuthCallback(): Promise<void> {
+  private async handleAuthCallback(isSignOutCallback: boolean): Promise<void> {
+    if (isSignOutCallback) {
+      await this.userManager.signoutRedirectCallback();
+      await this.userManager.removeUser();
+      return;
+    }
+
     if (this.isPopupContext()) {
       await this.userManager.signinPopupCallback();
       return;
@@ -460,6 +480,7 @@ const resolveAuthSettings = (input: {
     client_id: input.publishableKey,
     redirect_uri: new URL(window.location.origin).toString(),
     silent_redirect_uri: new URL(window.location.origin).toString(),
+    post_logout_redirect_uri: new URL(window.location.origin).toString(),
     response_type: "code",
     scope: "openid profile offline_access",
   };
