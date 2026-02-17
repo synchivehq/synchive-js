@@ -71,10 +71,6 @@ const getDefaultFetch = (): FetchLike => {
 export class SyncHiveClient {
   private readonly apiBaseUrl: string;
   private readonly fetchFn: FetchLike;
-  private readonly buildListUrl: SynchiveClientOptions["buildListUrl"];
-  private readonly buildGetUrl: SynchiveClientOptions["buildGetUrl"];
-  private readonly buildCreateUrl: SynchiveClientOptions["buildCreateUrl"];
-  private readonly buildUpdateUrl: SynchiveClientOptions["buildUpdateUrl"];
   private readonly userManager: UserManager;
 
   constructor(options: SynchiveClientOptions) {
@@ -109,25 +105,27 @@ export class SyncHiveClient {
     this.userManager = new UserManager(auth);
     this.apiBaseUrl = apiBaseUrl;
     this.fetchFn = options.fetch ?? getDefaultFetch();
-    this.buildListUrl = options.buildListUrl ?? defaultBuildListUrl;
-    this.buildGetUrl = options.buildGetUrl ?? defaultBuildGetUrl;
-    this.buildCreateUrl = options.buildCreateUrl ?? defaultBuildCreateUrl;
-    this.buildUpdateUrl = options.buildUpdateUrl ?? defaultBuildUpdateUrl;
   }
 
   async init(): Promise<void> {
     const hasCallbackParams = this.isRedirectCallback();
+    const isSignOutCallback = hasCallbackParams && this.isSignOutRedirectCallback();
     const isPopupWindow = this.isPopupContext();
-    if (!hasCallbackParams && !isPopupWindow) return;
+    if (!hasCallbackParams) {
+      if (isPopupWindow) {
+        // Close stale popup callback windows that no longer have auth params.
+        window.close();
+      }
+      return;
+    }
 
     try {
-      await this.handleAuthCallback();
+      await this.handleAuthCallback(isSignOutCallback);
       if (hasCallbackParams) {
         this.clearAuthParamsFromUrl();
       }
     } catch (error) {
-      // Popup callback pages can lose URL params in some preview/router setups.
-      // In that case, best effort close so users are not left on a stale popup UI.
+      // Some preview/router setups strip popup callback params. Close that stale popup.
       if (isPopupWindow && this.isMissingCallbackStateError(error)) {
         window.close();
         return;
@@ -210,23 +208,17 @@ export class SyncHiveClient {
   }
 
   async list<T>(shape: string, params?: ListParams): Promise<ListResult<T>> {
-    const url =
-      this.buildListUrl?.(shape, params, this.apiBaseUrl) ??
-      defaultBuildListUrl(shape, params, this.apiBaseUrl);
+    const url = defaultBuildListUrl(shape, params, this.apiBaseUrl);
     return this.request<ListResult<T>>(url);
   }
 
   async get<T>(shape: string, hiveId: string): Promise<T> {
-    const url =
-      this.buildGetUrl?.(shape, hiveId, this.apiBaseUrl) ??
-      defaultBuildGetUrl(shape, hiveId, this.apiBaseUrl);
+    const url = defaultBuildGetUrl(shape, hiveId, this.apiBaseUrl);
     return this.request<T>(url);
   }
 
   async create<T>(shape: string, payload: T): Promise<T> {
-    const url =
-      this.buildCreateUrl?.(shape, this.apiBaseUrl) ??
-      defaultBuildCreateUrl(shape, this.apiBaseUrl);
+    const url = defaultBuildCreateUrl(shape, this.apiBaseUrl);
     return this.request<T>(url, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -238,9 +230,7 @@ export class SyncHiveClient {
     hiveId: string,
     payload: Partial<T> | T,
   ): Promise<T> {
-    const url =
-      this.buildUpdateUrl?.(shape, hiveId, this.apiBaseUrl) ??
-      defaultBuildUpdateUrl(shape, hiveId, this.apiBaseUrl);
+    const url = defaultBuildUpdateUrl(shape, hiveId, this.apiBaseUrl);
     return this.request<T>(url, {
       method: "PATCH",
       body: JSON.stringify(payload),
@@ -283,7 +273,7 @@ export class SyncHiveClient {
       const renewed = await this.userManager.signinSilent();
       if (renewed && !renewed.expired) return renewed;
     } catch {
-      // Ignore silent renew failures and fall through to error.
+      // Silent renew can fail for expected reasons (expired OP session, blocked cookies).
     }
 
     throw new Error("User is not authenticated. Call signInRedirect() first.");
@@ -314,6 +304,19 @@ export class SyncHiveClient {
     );
   }
 
+  private isSignOutRedirectCallback(): boolean {
+    if (typeof window === "undefined") return false;
+    if (!window.location) return false;
+
+    const params = this.getAuthParamsFromLocation();
+    return (
+      params.has("state") &&
+      !params.has("code") &&
+      !params.has("id_token") &&
+      !params.has("error")
+    );
+  }
+
   private getAuthParamsFromLocation(): URLSearchParams {
     if (typeof window === "undefined") return new URLSearchParams();
 
@@ -329,7 +332,7 @@ export class SyncHiveClient {
       return new URLSearchParams(hashValue.slice(queryIndex + 1));
     }
 
-    // Some providers/router stacks put auth params directly in the hash fragment.
+    // Some providers/router stacks place auth params directly in the hash fragment.
     if (hashValue.includes("code=") || hashValue.includes("state=")) {
       return new URLSearchParams(hashValue);
     }
@@ -342,7 +345,7 @@ export class SyncHiveClient {
     try {
       return window.self !== window.top;
     } catch {
-      // Cross-origin access can throw, which still means "framed".
+      // Cross-origin frame access throws here; treat it as framed.
       return true;
     }
   }
@@ -354,12 +357,16 @@ export class SyncHiveClient {
 
   private isMissingCallbackStateError(error: unknown): boolean {
     if (!(error instanceof Error)) return false;
-    const message = error.message.toLowerCase();
-    return (
-      message.includes("no state in response") ||
-      message.includes("state not found in storage") ||
-      message.includes("invalid response_type in state")
-    );
+    const message = error.message.toLowerCase().replace(/\s+/g, " ").trim();
+
+    const knownStateErrors = [
+      "no state in response",
+      "no matching state found in storage",
+      "state not found in storage",
+      "invalid response_type in state",
+    ];
+
+    return knownStateErrors.some((text) => message.includes(text));
   }
 
   private async signInWithPopupOrRedirectFallback(): Promise<void> {
@@ -447,7 +454,13 @@ export class SyncHiveClient {
     window.history.replaceState({}, document.title, url.toString());
   }
 
-  private async handleAuthCallback(): Promise<void> {
+  private async handleAuthCallback(isSignOutCallback: boolean): Promise<void> {
+    if (isSignOutCallback) {
+      await this.userManager.signoutRedirectCallback();
+      await this.userManager.removeUser();
+      return;
+    }
+
     if (this.isPopupContext()) {
       await this.userManager.signinPopupCallback();
       return;
@@ -491,7 +504,7 @@ const decodePublishableKey = (
 };
 
 const normalizeBase64 = (value: string): string => {
-  // Support base64url and non-standard variants from external sources.
+  // Accept base64url and legacy variants seen in externally supplied keys.
   let normalized = value
     .replace(/-/g, "+")
     .replace(/_/g, "/")
@@ -532,6 +545,7 @@ const resolveAuthSettings = (input: {
     client_id: input.publishableKey,
     redirect_uri: new URL(window.location.origin).toString(),
     silent_redirect_uri: new URL(window.location.origin).toString(),
+    post_logout_redirect_uri: new URL(window.location.origin).toString(),
     response_type: "code",
     scope: "openid profile offline_access",
   };

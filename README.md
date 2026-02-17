@@ -83,9 +83,13 @@ Advanced
 ## Notes
 
 - Tokens are stored in `localStorage` using `oidc-client-ts`. Be aware any XSS in your app can expose these tokens.
+<<<<<<< HEAD
 - `init()` is callback initialization only and throws if sign-in callback handling fails. Wrap it in `try/catch` to show a user-friendly message.
 - `onAuthStateChange()` calls your listener immediately with current state, then again whenever auth state changes.
 - Auth lifecycle event names are exported as SDK types via `AuthStateChangeTrigger`: `"authenticated"` and `"unauthenticated"`.
 - On initial mount, the first emitted event can be either `"authenticated"` or `"unauthenticated"` depending on whether a valid session already exists.
+=======
+- `init()` runs on sign-in and sign-out callbacks and throws if callback handling fails. Wrap it in `try/catch` to show a user-friendly message.
+>>>>>>> a0710f2829211fd688da3a2eda4ceb58da445b8f
 - If this SDK is run within an iframe, authentication uses a popup because many identity providers block login pages inside frames (`X-Frame-Options` / `frame-ancestors`). If popups are blocked, the SDK attempts to continue by redirecting the top-level page; if that is also blocked by the host iframe/browser policy, authentication fails with an explicit error.
 - Third-party notices are listed in `THIRD_PARTY_NOTICES.md`.

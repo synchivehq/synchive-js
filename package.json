@@ -1,6 +1,10 @@
 {
   "name": "@synchive/synchive-js",
+<<<<<<< HEAD
   "version": "0.1.7",
+=======
+  "version": "0.1.6",
+>>>>>>> a0710f2829211fd688da3a2eda4ceb58da445b8f
   "description": "SyncHive JS SDK",
   "license": "MIT",
   "type": "module",

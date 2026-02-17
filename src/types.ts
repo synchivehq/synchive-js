@@ -46,12 +46,4 @@ export type SynchiveClientOptions = {
   authOverrides?: Partial<UserManagerSettings>;
   storage?: Storage;
   fetch?: FetchLike;
-  buildListUrl?: (
-    shape: string,
-    params: ListParams | undefined,
-    baseUrl: string,
-  ) => string;
-  buildGetUrl?: (shape: string, hiveId: string, baseUrl: string) => string;
-  buildCreateUrl?: (shape: string, baseUrl: string) => string;
-  buildUpdateUrl?: (shape: string, hiveId: string, baseUrl: string) => string;
 };
