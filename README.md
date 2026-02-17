@@ -17,7 +17,7 @@ const synchive = new SyncHiveClient({
   publishableKey: "sh_publishable_c2hrX2xpdmVf...ODo",
 });
 
-// Initialize the client (handles auth callbacks automatically)
+// Initialize the client
 try {
   await synchive.init();
 } catch (error) {
@@ -25,19 +25,19 @@ try {
   console.error("Auth failed:", error);
 }
 
-// Simple logged-in / logged-out UI logic
-const user = await synchive.getUser();
-const isLoggedIn = !!user && !user.expired;
+// Listen for auth lifecycle events.
+synchive.onAuthStateChange(({ user }, event) => {
+  // Events fire immediately on mount, then again whenever auth state changes.
+  if (event === "authenticated") {
+    // Set user state and show logged-in UI.
+    // setUser(user);
+  }
 
-if (isLoggedIn) {
-  // Render logged-in UI
-  // Example:
-  // onSignOutClick -> await synchive.signOutRedirect();
-} else {
-  // Render logged-out UI with a Sign In action
-  // Example:
-  // onSignInClick -> await synchive.signInRedirect();
-}
+  if (event === "unauthenticated") {
+    // Clear user state and show logged-out UI.
+    // setUser(null);
+  }
+});
 
 // Data helpers
 try {
@@ -61,13 +61,14 @@ try {
 }
 ```
 
-Most apps only need `init()`, `signInRedirect()`, `list()`, `get()`, `create()`, and `update()`.
+Most apps only need `init()`, `onAuthStateChange()`, `signInRedirect()`, `list()`, `get()`, `create()`, and `update()`.
 
 ## Helpers
 
 Common
 
 - `init(): Promise<void>`
+- `onAuthStateChange(listener: AuthStateChangeListener): AuthStateChangeUnsubscribe` (returns a cleanup callback)
 - `signInRedirect(): Promise<void>`
 - `list<T>(shape: string, params?: { top?: number; skip?: number; filter?: string; orderby?: string }): Promise<{ shapes: T[]; pagination: { totalItems?: number; totalPages?: number; pageNumber?: number; pageSize?: number } }>`
 - `get<T>(shape: string, hiveId: string): Promise<T>`
@@ -82,6 +83,9 @@ Advanced
 ## Notes
 
 - Tokens are stored in `localStorage` using `oidc-client-ts`. Be aware any XSS in your app can expose these tokens.
-- `init()` runs only on the sign-in callback and throws if the sign-in failed. Wrap it in `try/catch` to show a user-friendly message.
+- `init()` is callback initialization only and throws if sign-in callback handling fails. Wrap it in `try/catch` to show a user-friendly message.
+- `onAuthStateChange()` calls your listener immediately with current state, then again whenever auth state changes.
+- Auth lifecycle event names are exported as SDK types via `AuthStateChangeTrigger`: `"authenticated"` and `"unauthenticated"`.
+- On initial mount, the first emitted event can be either `"authenticated"` or `"unauthenticated"` depending on whether a valid session already exists.
 - If this SDK is run within an iframe, authentication uses a popup because many identity providers block login pages inside frames (`X-Frame-Options` / `frame-ancestors`). If popups are blocked, the SDK attempts to continue by redirecting the top-level page; if that is also blocked by the host iframe/browser policy, authentication fails with an explicit error.
 - Third-party notices are listed in `THIRD_PARTY_NOTICES.md`.

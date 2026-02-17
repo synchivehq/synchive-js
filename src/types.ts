@@ -1,4 +1,4 @@
-import type { UserManagerSettings } from "oidc-client-ts";
+import type { User, UserManagerSettings } from "oidc-client-ts";
 
 export type ListParams = {
   top?: number;
@@ -20,6 +20,22 @@ export type ListResult<T = ShapeRecord> = {
   shapes: T[];
   pagination: Pagination;
 };
+
+export type AuthState = {
+  user: User | null;
+  isAuthenticated: boolean;
+};
+
+export type AuthStateChangeTrigger =
+  | "authenticated"
+  | "unauthenticated";
+
+export type AuthStateChangeListener = (
+  state: AuthState,
+  trigger: AuthStateChangeTrigger,
+) => void;
+
+export type AuthStateChangeUnsubscribe = () => void;
 
 export type FetchLike = typeof fetch;
 

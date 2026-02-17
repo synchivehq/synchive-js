@@ -5,6 +5,10 @@ import {
   type UserManagerSettings,
 } from "oidc-client-ts";
 import type {
+  AuthState,
+  AuthStateChangeListener,
+  AuthStateChangeTrigger,
+  AuthStateChangeUnsubscribe,
   FetchLike,
   ListParams,
   ListResult,
@@ -149,6 +153,62 @@ export class SyncHiveClient {
     return this.userManager.getUser();
   }
 
+  onAuthStateChange(
+    listener: AuthStateChangeListener,
+  ): AuthStateChangeUnsubscribe {
+    const events = this.userManager.events;
+    let isSubscribed = true;
+
+    const emitState = (user: User | null): void => {
+      if (!isSubscribed) return;
+      const trigger = this.toAuthStateChangeTrigger(user);
+      listener(this.toAuthState(user), trigger);
+    };
+
+    const emitCurrentState = async (): Promise<void> => {
+      const user = await this.userManager.getUser();
+      if (!isSubscribed) return;
+      emitState(user);
+    };
+
+    const handleUserLoaded = (user: User): void => {
+      emitState(user);
+    };
+
+    const handleUserUnloaded = (): void => {
+      void emitCurrentState();
+    };
+
+    const handleUserSignedOut = (): void => {
+      void emitCurrentState();
+    };
+
+    const handleAccessTokenExpired = (): void => {
+      void emitCurrentState();
+    };
+
+    const handleSilentRenewError = (): void => {
+      void emitCurrentState();
+    };
+
+    events.addUserLoaded(handleUserLoaded);
+    events.addUserUnloaded(handleUserUnloaded);
+    events.addUserSignedOut(handleUserSignedOut);
+    events.addAccessTokenExpired(handleAccessTokenExpired);
+    events.addSilentRenewError(handleSilentRenewError);
+
+    void emitCurrentState();
+
+    return () => {
+      isSubscribed = false;
+      events.removeUserLoaded(handleUserLoaded);
+      events.removeUserUnloaded(handleUserUnloaded);
+      events.removeUserSignedOut(handleUserSignedOut);
+      events.removeAccessTokenExpired(handleAccessTokenExpired);
+      events.removeSilentRenewError(handleSilentRenewError);
+    };
+  }
+
   async list<T>(shape: string, params?: ListParams): Promise<ListResult<T>> {
     const url =
       this.buildListUrl?.(shape, params, this.apiBaseUrl) ??
@@ -227,6 +287,18 @@ export class SyncHiveClient {
     }
 
     throw new Error("User is not authenticated. Call signInRedirect() first.");
+  }
+
+  private toAuthState(user: User | null): AuthState {
+    const activeUser = user && !user.expired ? user : null;
+    return {
+      user: activeUser,
+      isAuthenticated: !!activeUser,
+    };
+  }
+
+  private toAuthStateChangeTrigger(user: User | null): AuthStateChangeTrigger {
+    return user && !user.expired ? "authenticated" : "unauthenticated";
   }
 
   private isRedirectCallback(): boolean {
