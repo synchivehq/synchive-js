@@ -20,6 +20,59 @@ const normalizeBaseUrl = (baseUrl: string): string => {
   return baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
 };
 
+const tenantAppBasePathPattern = /^\/workspace\/[^/]+\/hive\/[^/]+/;
+
+const getTenantAppBasePath = (pathname?: string): string => {
+  if (pathname) {
+    const match = pathname.match(tenantAppBasePathPattern);
+    return match?.[0] ?? "";
+  }
+
+  if (typeof window === "undefined") return "";
+  return getTenantAppBasePath(window.location.pathname);
+};
+
+const getTenantAwareApiBaseUrl = (baseUrl: string): string => {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const tenantAppBasePath = getTenantAppBasePath();
+
+  if (!normalizedBaseUrl || !tenantAppBasePath) {
+    return normalizedBaseUrl;
+  }
+
+  const tenantApiPath = tenantAppBasePath.replace(/^\//, "");
+
+  try {
+    const url = new URL(
+      normalizedBaseUrl,
+      typeof window === "undefined" ? undefined : window.location.origin,
+    );
+
+    if (url.pathname.includes(`/${tenantApiPath}`)) {
+      return normalizeBaseUrl(url.toString());
+    }
+
+    if (url.pathname.endsWith("/shape")) {
+      const prefix = url.pathname.slice(0, -"/shape".length).replace(/\/$/, "");
+      url.pathname = `${prefix}/${tenantApiPath}/shape`;
+    } else {
+      url.pathname = `${url.pathname.replace(/\/$/, "")}/${tenantApiPath}`;
+    }
+
+    return normalizeBaseUrl(url.toString());
+  } catch {
+    return normalizedBaseUrl;
+  }
+};
+
+const getDefaultRedirectUrl = (): string => {
+  if (typeof window === "undefined") {
+    throw new Error("Browser redirects require a window environment.");
+  }
+
+  return new URL(getTenantAppBasePath() || "/", window.location.origin).toString();
+};
+
 const defaultBuildListUrl = (
   shape: string,
   params: ListParams | undefined,
@@ -79,7 +132,9 @@ export class SyncHiveClient {
       ? decodePublishableKey(publishableKey)
       : undefined;
     const derivedApiBaseUrl = derived
-      ? `https://apis.${derived.environment}.synchive.com/v1/shape`
+      ? getTenantAwareApiBaseUrl(
+          `https://apis.${derived.environment}.synchive.com/v1/shape`,
+        )
       : undefined;
     const apiBaseUrl = options.apiBaseUrl ?? derivedApiBaseUrl;
     if (!apiBaseUrl) {
@@ -103,7 +158,7 @@ export class SyncHiveClient {
     });
 
     this.userManager = new UserManager(auth);
-    this.apiBaseUrl = apiBaseUrl;
+    this.apiBaseUrl = getTenantAwareApiBaseUrl(apiBaseUrl);
     this.fetchFn = options.fetch ?? getDefaultFetch();
   }
 
@@ -549,12 +604,14 @@ const resolveAuthSettings = (input: {
 
   const authority = `https://apis.${input.derived.environment}.synchive.com/v1/auth/`;
 
+  const redirectUrl = getDefaultRedirectUrl();
+
   const defaults: UserManagerSettings = {
     authority,
     client_id: input.publishableKey,
-    redirect_uri: new URL(window.location.origin).toString(),
-    silent_redirect_uri: new URL(window.location.origin).toString(),
-    post_logout_redirect_uri: new URL(window.location.origin).toString(),
+    redirect_uri: redirectUrl,
+    silent_redirect_uri: redirectUrl,
+    post_logout_redirect_uri: redirectUrl,
     response_type: "code",
     scope: "openid profile offline_access",
   };
