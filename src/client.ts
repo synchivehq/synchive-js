@@ -133,7 +133,7 @@ export class SyncHiveClient {
       : undefined;
     const derivedApiBaseUrl = derived
       ? getTenantAwareApiBaseUrl(
-          `https://apis.${derived.environment}.synchive.com/v1/shape`,
+          `https://apis.${derived.environment}.synchive.com/v1/hives/${encodeURIComponent(derived.tenantHiveId)}/shape`,
         )
       : undefined;
     const apiBaseUrl = options.apiBaseUrl ?? derivedApiBaseUrl;
@@ -537,18 +537,19 @@ export class SyncHiveClient {
 type DecodedPublishableKey = {
   encryptedKey: string;
   environment: string;
+  tenantHiveId: string;
 };
 
-const PUBLISHABLE_PREFIX = "sh_publishable_";
+const PUBLISHABLE_V1_PREFIX = "sh_publishable_v1_";
 
 const decodePublishableKey = (
   publishableKey: string,
 ): DecodedPublishableKey => {
-  if (!publishableKey.startsWith(PUBLISHABLE_PREFIX)) {
-    throw new Error("publishableKey is invalid or missing required prefix.");
+  if (!publishableKey.startsWith(PUBLISHABLE_V1_PREFIX)) {
+    throw new Error("publishableKey is invalid or missing required v1 prefix.");
   }
 
-  const encoded = publishableKey.slice(PUBLISHABLE_PREFIX.length);
+  const encoded = publishableKey.slice(PUBLISHABLE_V1_PREFIX.length);
   let decoded: string;
   try {
     decoded = atob(normalizeBase64(encoded));
@@ -557,13 +558,14 @@ const decodePublishableKey = (
   }
 
   const parts = decoded.split("::");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
     throw new Error("publishableKey payload is invalid.");
   }
 
   return {
-    encryptedKey: parts[0],
-    environment: parts[1],
+    environment: parts[0],
+    tenantHiveId: parts[1],
+    encryptedKey: parts[2],
   };
 };
 
@@ -602,7 +604,7 @@ const resolveAuthSettings = (input: {
     throw new Error("publishableKey auth requires a browser environment.");
   }
 
-  const authority = `https://apis.${input.derived.environment}.synchive.com/v1/auth/`;
+  const authority = `https://apis.${input.derived.environment}.synchive.com/v1/hives/${encodeURIComponent(input.derived.tenantHiveId)}/auth/`;
 
   const redirectUrl = getDefaultRedirectUrl();
 
