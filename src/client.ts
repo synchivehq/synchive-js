@@ -70,7 +70,10 @@ const getDefaultRedirectUrl = (): string => {
     throw new Error("Browser redirects require a window environment.");
   }
 
-  return new URL(getTenantAppBasePath() || "/", window.location.origin).toString();
+  return new URL(
+    getTenantAppBasePath() || "/",
+    window.location.origin,
+  ).toString();
 };
 
 const defaultBuildListUrl = (
@@ -133,7 +136,7 @@ export class SyncHiveClient {
       : undefined;
     const derivedApiBaseUrl = derived
       ? getTenantAwareApiBaseUrl(
-          `https://apis.${derived.environment}.synchive.com/v1/hives/${encodeURIComponent(derived.tenantHiveId)}/shape`,
+          `${getApisHost(derived.environment)}/v1/hives/${encodeURIComponent(derived.tenantHiveId)}/shape`,
         )
       : undefined;
     const apiBaseUrl = options.apiBaseUrl ?? derivedApiBaseUrl;
@@ -164,7 +167,8 @@ export class SyncHiveClient {
 
   async init(): Promise<void> {
     const hasCallbackParams = this.isRedirectCallback();
-    const isSignOutCallback = hasCallbackParams && this.isSignOutRedirectCallback();
+    const isSignOutCallback =
+      hasCallbackParams && this.isSignOutRedirectCallback();
     const isPopupWindow = this.isPopupContext();
     if (!hasCallbackParams) {
       if (isPopupWindow) {
@@ -343,9 +347,7 @@ export class SyncHiveClient {
   }
 
   private toAuthStateChangeTrigger(user: User | null): AuthStateChangeTrigger {
-    return this.isAuthenticatedUser(user)
-      ? "authenticated"
-      : "unauthenticated";
+    return this.isAuthenticatedUser(user) ? "authenticated" : "unauthenticated";
   }
 
   private isAuthenticatedUser(user: User | null): user is User {
@@ -582,6 +584,12 @@ const normalizeBase64 = (value: string): string => {
   return normalized;
 };
 
+const getApisHost = (environment: string): string => {
+  return environment === "prod"
+    ? "https://apis.synchive.com"
+    : `https://apis.${environment}.synchive.com`;
+};
+
 const resolveAuthSettings = (input: {
   publishableKey?: string;
   derived?: DecodedPublishableKey;
@@ -604,7 +612,7 @@ const resolveAuthSettings = (input: {
     throw new Error("publishableKey auth requires a browser environment.");
   }
 
-  const authority = `https://apis.${input.derived.environment}.synchive.com/v1/hives/${encodeURIComponent(input.derived.tenantHiveId)}/auth/`;
+  const authority = `${getApisHost(input.derived.environment)}/v1/hives/${encodeURIComponent(input.derived.tenantHiveId)}/auth/`;
 
   const redirectUrl = getDefaultRedirectUrl();
 
