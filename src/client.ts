@@ -612,7 +612,7 @@ const resolveAuthSettings = (input: {
     throw new Error("publishableKey auth requires a browser environment.");
   }
 
-  const authority = `${getApisHost(input.derived.environment)}/v1/hives/${encodeURIComponent(input.derived.tenantHiveId)}/auth/`;
+  const authority = `${getApisHost(input.derived.environment)}/v1/auth/`;
 
   const redirectUrl = getDefaultRedirectUrl();
 
