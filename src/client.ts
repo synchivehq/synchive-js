@@ -20,6 +20,62 @@ const normalizeBaseUrl = (baseUrl: string): string => {
   return baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
 };
 
+const tenantAppBasePathPattern = /^\/workspace\/[^/]+\/hive\/[^/]+/;
+
+const getTenantAppBasePath = (pathname?: string): string => {
+  if (pathname) {
+    const match = pathname.match(tenantAppBasePathPattern);
+    return match?.[0] ?? "";
+  }
+
+  if (typeof window === "undefined") return "";
+  return getTenantAppBasePath(window.location.pathname);
+};
+
+const applyTenantAppBasePathToApiBaseUrl = (baseUrl: string): string => {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const tenantAppBasePath = getTenantAppBasePath();
+
+  if (!normalizedBaseUrl || !tenantAppBasePath) {
+    return normalizedBaseUrl;
+  }
+
+  const tenantApiPath = tenantAppBasePath.replace(/^\//, "");
+
+  try {
+    const url = new URL(
+      normalizedBaseUrl,
+      typeof window === "undefined" ? undefined : window.location.origin,
+    );
+
+    if (url.pathname.includes(`/${tenantApiPath}`)) {
+      return normalizeBaseUrl(url.toString());
+    }
+
+    if (url.pathname.endsWith("/shape")) {
+      const prefix = url.pathname.slice(0, -"/shape".length).replace(/\/$/, "");
+      url.pathname = `${prefix}/${tenantApiPath}/shape`;
+    } else {
+      url.pathname = `${url.pathname.replace(/\/$/, "")}/${tenantApiPath}`;
+    }
+
+    return normalizeBaseUrl(url.toString());
+  } catch {
+    return normalizedBaseUrl;
+  }
+};
+
+const getDefaultRedirectUrl = (): string => {
+  if (typeof window === "undefined") {
+    throw new Error("Browser redirects require a window environment.");
+  }
+
+  return new URL(
+    getTenantAppBasePath() || "/",
+    window.location.origin,
+  ).toString();
+};
+
 const defaultBuildListUrl = (
   shape: string,
   params: ListParams | undefined,
@@ -79,7 +135,7 @@ export class SyncHiveClient {
       ? decodePublishableKey(publishableKey)
       : undefined;
     const derivedApiBaseUrl = derived
-      ? `https://apis.${derived.environment}.synchive.com/v1/shape`
+      ? applyTenantAppBasePathToApiBaseUrl(getPublishableKeyApiBaseUrl(derived))
       : undefined;
     const apiBaseUrl = options.apiBaseUrl ?? derivedApiBaseUrl;
     if (!apiBaseUrl) {
@@ -103,13 +159,14 @@ export class SyncHiveClient {
     });
 
     this.userManager = new UserManager(auth);
-    this.apiBaseUrl = apiBaseUrl;
+    this.apiBaseUrl = applyTenantAppBasePathToApiBaseUrl(apiBaseUrl);
     this.fetchFn = options.fetch ?? getDefaultFetch();
   }
 
   async init(): Promise<void> {
     const hasCallbackParams = this.isRedirectCallback();
-    const isSignOutCallback = hasCallbackParams && this.isSignOutRedirectCallback();
+    const isSignOutCallback =
+      hasCallbackParams && this.isSignOutRedirectCallback();
     const isPopupWindow = this.isPopupContext();
     if (!hasCallbackParams) {
       if (isPopupWindow) {
@@ -288,9 +345,7 @@ export class SyncHiveClient {
   }
 
   private toAuthStateChangeTrigger(user: User | null): AuthStateChangeTrigger {
-    return this.isAuthenticatedUser(user)
-      ? "authenticated"
-      : "unauthenticated";
+    return this.isAuthenticatedUser(user) ? "authenticated" : "unauthenticated";
   }
 
   private isAuthenticatedUser(user: User | null): user is User {
@@ -482,17 +537,62 @@ export class SyncHiveClient {
 type DecodedPublishableKey = {
   encryptedKey: string;
   environment: string;
+  tenantHiveId?: string;
 };
 
 const PUBLISHABLE_PREFIX = "sh_publishable_";
+const PUBLISHABLE_V1_PREFIX = "sh_publishable_v1_";
+
+const getPublishableKeyApiBaseUrl = (
+  derived: DecodedPublishableKey,
+): string => {
+  if (derived.tenantHiveId) {
+    return `${getApisHost(derived.environment)}/v1/hives/${encodeURIComponent(derived.tenantHiveId)}/shape`;
+  }
+
+  return `${getApisHost(derived.environment)}/v1/shape`;
+};
 
 const decodePublishableKey = (
   publishableKey: string,
 ): DecodedPublishableKey => {
-  if (!publishableKey.startsWith(PUBLISHABLE_PREFIX)) {
-    throw new Error("publishableKey is invalid or missing required prefix.");
+  if (publishableKey.startsWith(PUBLISHABLE_V1_PREFIX)) {
+    return decodeV1PublishableKey(publishableKey);
   }
 
+  if (publishableKey.startsWith(PUBLISHABLE_PREFIX)) {
+    return decodeLegacyPublishableKey(publishableKey);
+  }
+
+  throw new Error("publishableKey is invalid or missing required prefix.");
+};
+
+const decodeV1PublishableKey = (
+  publishableKey: string,
+): DecodedPublishableKey => {
+  const encoded = publishableKey.slice(PUBLISHABLE_V1_PREFIX.length);
+  let decoded: string;
+  try {
+    decoded = atob(normalizeBase64(encoded));
+  } catch {
+    throw new Error("publishableKey is not valid base64.");
+  }
+
+  const parts = decoded.split("::");
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+    throw new Error("publishableKey payload is invalid.");
+  }
+
+  return {
+    environment: parts[0],
+    tenantHiveId: parts[1],
+    encryptedKey: parts[2],
+  };
+};
+
+const decodeLegacyPublishableKey = (
+  publishableKey: string,
+): DecodedPublishableKey => {
   const encoded = publishableKey.slice(PUBLISHABLE_PREFIX.length);
   let decoded: string;
   try {
@@ -525,6 +625,12 @@ const normalizeBase64 = (value: string): string => {
   return normalized;
 };
 
+const getApisHost = (environment: string): string => {
+  return environment === "prod"
+    ? "https://apis.synchive.com"
+    : `https://apis.${environment}.synchive.com`;
+};
+
 const resolveAuthSettings = (input: {
   publishableKey?: string;
   derived?: DecodedPublishableKey;
@@ -547,14 +653,16 @@ const resolveAuthSettings = (input: {
     throw new Error("publishableKey auth requires a browser environment.");
   }
 
-  const authority = `https://apis.${input.derived.environment}.synchive.com/v1/auth/`;
+  const authority = `${getApisHost(input.derived.environment)}/v1/auth/`;
+
+  const redirectUrl = getDefaultRedirectUrl();
 
   const defaults: UserManagerSettings = {
     authority,
     client_id: input.publishableKey,
-    redirect_uri: new URL(window.location.origin).toString(),
-    silent_redirect_uri: new URL(window.location.origin).toString(),
-    post_logout_redirect_uri: new URL(window.location.origin).toString(),
+    redirect_uri: redirectUrl,
+    silent_redirect_uri: redirectUrl,
+    post_logout_redirect_uri: redirectUrl,
     response_type: "code",
     scope: "openid profile offline_access",
   };
