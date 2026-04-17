@@ -32,7 +32,7 @@ const getTenantAppBasePath = (pathname?: string): string => {
   return getTenantAppBasePath(window.location.pathname);
 };
 
-const getTenantAwareApiBaseUrl = (baseUrl: string): string => {
+const applyTenantAppBasePathToApiBaseUrl = (baseUrl: string): string => {
   const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
   const tenantAppBasePath = getTenantAppBasePath();
 
@@ -135,9 +135,7 @@ export class SyncHiveClient {
       ? decodePublishableKey(publishableKey)
       : undefined;
     const derivedApiBaseUrl = derived
-      ? getTenantAwareApiBaseUrl(
-          `${getApisHost(derived.environment)}/v1/hives/${encodeURIComponent(derived.tenantHiveId)}/shape`,
-        )
+      ? applyTenantAppBasePathToApiBaseUrl(getPublishableKeyApiBaseUrl(derived))
       : undefined;
     const apiBaseUrl = options.apiBaseUrl ?? derivedApiBaseUrl;
     if (!apiBaseUrl) {
@@ -161,7 +159,7 @@ export class SyncHiveClient {
     });
 
     this.userManager = new UserManager(auth);
-    this.apiBaseUrl = getTenantAwareApiBaseUrl(apiBaseUrl);
+    this.apiBaseUrl = applyTenantAppBasePathToApiBaseUrl(apiBaseUrl);
     this.fetchFn = options.fetch ?? getDefaultFetch();
   }
 
@@ -539,18 +537,39 @@ export class SyncHiveClient {
 type DecodedPublishableKey = {
   encryptedKey: string;
   environment: string;
-  tenantHiveId: string;
+  tenantHiveId?: string;
 };
 
+const PUBLISHABLE_PREFIX = "sh_publishable_";
 const PUBLISHABLE_V1_PREFIX = "sh_publishable_v1_";
+
+const getPublishableKeyApiBaseUrl = (
+  derived: DecodedPublishableKey,
+): string => {
+  if (derived.tenantHiveId) {
+    return `${getApisHost(derived.environment)}/v1/hives/${encodeURIComponent(derived.tenantHiveId)}/shape`;
+  }
+
+  return `${getApisHost(derived.environment)}/v1/shape`;
+};
 
 const decodePublishableKey = (
   publishableKey: string,
 ): DecodedPublishableKey => {
-  if (!publishableKey.startsWith(PUBLISHABLE_V1_PREFIX)) {
-    throw new Error("publishableKey is invalid or missing required v1 prefix.");
+  if (publishableKey.startsWith(PUBLISHABLE_V1_PREFIX)) {
+    return decodeV1PublishableKey(publishableKey);
   }
 
+  if (publishableKey.startsWith(PUBLISHABLE_PREFIX)) {
+    return decodeLegacyPublishableKey(publishableKey);
+  }
+
+  throw new Error("publishableKey is invalid or missing required prefix.");
+};
+
+const decodeV1PublishableKey = (
+  publishableKey: string,
+): DecodedPublishableKey => {
   const encoded = publishableKey.slice(PUBLISHABLE_V1_PREFIX.length);
   let decoded: string;
   try {
@@ -568,6 +587,28 @@ const decodePublishableKey = (
     environment: parts[0],
     tenantHiveId: parts[1],
     encryptedKey: parts[2],
+  };
+};
+
+const decodeLegacyPublishableKey = (
+  publishableKey: string,
+): DecodedPublishableKey => {
+  const encoded = publishableKey.slice(PUBLISHABLE_PREFIX.length);
+  let decoded: string;
+  try {
+    decoded = atob(normalizeBase64(encoded));
+  } catch {
+    throw new Error("publishableKey is not valid base64.");
+  }
+
+  const parts = decoded.split("::");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    throw new Error("publishableKey payload is invalid.");
+  }
+
+  return {
+    encryptedKey: parts[0],
+    environment: parts[1],
   };
 };
 
