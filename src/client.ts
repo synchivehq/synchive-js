@@ -131,11 +131,13 @@ export class SyncHiveClient {
 
   constructor(options: SynchiveClientOptions) {
     const publishableKey = options.publishableKey?.trim();
-    const derived = publishableKey
+    const parsedPublishableKey = publishableKey
       ? decodePublishableKey(publishableKey)
       : undefined;
-    const derivedApiBaseUrl = derived
-      ? applyTenantAppBasePathToApiBaseUrl(getPublishableKeyApiBaseUrl(derived))
+    const derivedApiBaseUrl = parsedPublishableKey
+      ? applyTenantAppBasePathToApiBaseUrl(
+          getPublishableKeyApiBaseUrl(parsedPublishableKey),
+        )
       : undefined;
     const apiBaseUrl = options.apiBaseUrl ?? derivedApiBaseUrl;
     if (!apiBaseUrl) {
@@ -153,7 +155,7 @@ export class SyncHiveClient {
 
     const auth = resolveAuthSettings({
       publishableKey,
-      derived,
+      derived: parsedPublishableKey?.decoded,
       options,
       storage,
     });
@@ -540,28 +542,35 @@ type DecodedPublishableKey = {
   tenantHiveId?: string;
 };
 
+type ParsedPublishableKey = {
+  decoded: DecodedPublishableKey;
+  region?: string;
+};
+
 const PUBLISHABLE_PREFIX = "sh_publishable_";
 const PUBLISHABLE_V1_PREFIX = "sh_publishable_v1_";
 
-const getPublishableKeyApiBaseUrl = (
-  derived: DecodedPublishableKey,
-): string => {
-  if (derived.tenantHiveId) {
-    return `${getApisHost(derived.environment)}/v1/hives/${encodeURIComponent(derived.tenantHiveId)}/shape`;
+const getPublishableKeyApiBaseUrl = (parsed: ParsedPublishableKey): string => {
+  const apisHost = parsed.region
+    ? getRegionalApisHost(parsed.decoded.environment, parsed.region)
+    : getApisHost(parsed.decoded.environment);
+
+  if (parsed.decoded.tenantHiveId) {
+    return `${apisHost}/v1/hives/${encodeURIComponent(parsed.decoded.tenantHiveId)}/shape`;
   }
 
-  return `${getApisHost(derived.environment)}/v1/shape`;
+  return `${apisHost}/v1/shape`;
 };
 
-const decodePublishableKey = (
-  publishableKey: string,
-): DecodedPublishableKey => {
+const decodePublishableKey = (publishableKey: string): ParsedPublishableKey => {
   if (publishableKey.startsWith(PUBLISHABLE_V1_PREFIX)) {
     return decodeV1PublishableKey(publishableKey);
   }
 
   if (publishableKey.startsWith(PUBLISHABLE_PREFIX)) {
-    return decodeLegacyPublishableKey(publishableKey);
+    return {
+      decoded: decodeLegacyPublishableKey(publishableKey),
+    };
   }
 
   throw new Error("publishableKey is invalid or missing required prefix.");
@@ -569,8 +578,18 @@ const decodePublishableKey = (
 
 const decodeV1PublishableKey = (
   publishableKey: string,
-): DecodedPublishableKey => {
-  const encoded = publishableKey.slice(PUBLISHABLE_V1_PREFIX.length);
+): ParsedPublishableKey => {
+  const keyContents = publishableKey.slice(PUBLISHABLE_V1_PREFIX.length);
+  const regionSeparatorIndex = keyContents.indexOf("_");
+  const hasRegion = regionSeparatorIndex > 0;
+  const hasPayload = regionSeparatorIndex < keyContents.length - 1;
+
+  if (!hasRegion || !hasPayload) {
+    throw new Error("publishableKey is missing region or payload.");
+  }
+
+  const region = keyContents.slice(0, regionSeparatorIndex);
+  const encoded = keyContents.slice(regionSeparatorIndex + 1);
   let decoded: string;
   try {
     decoded = atob(normalizeBase64(encoded));
@@ -584,9 +603,12 @@ const decodeV1PublishableKey = (
   }
 
   return {
-    environment: parts[0],
-    tenantHiveId: parts[1],
-    encryptedKey: parts[2],
+    region,
+    decoded: {
+      environment: parts[0],
+      tenantHiveId: parts[1],
+      encryptedKey: parts[2],
+    },
   };
 };
 
@@ -629,6 +651,12 @@ const getApisHost = (environment: string): string => {
   return environment === "prod"
     ? "https://apis.synchive.com"
     : `https://apis.${environment}.synchive.com`;
+};
+
+const getRegionalApisHost = (environment: string, region: string): string => {
+  return environment === "prod"
+    ? `https://${region}-apis.synchive.com`
+    : `https://${region}-apis.${environment}.synchive.com`;
 };
 
 const resolveAuthSettings = (input: {
