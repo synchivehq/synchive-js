@@ -155,7 +155,7 @@ export class SyncHiveClient {
 
     const auth = resolveAuthSettings({
       publishableKey,
-      derived: parsedPublishableKey?.decoded,
+      parsed: parsedPublishableKey,
       options,
       storage,
     });
@@ -562,6 +562,12 @@ const getPublishableKeyApiBaseUrl = (parsed: ParsedPublishableKey): string => {
   return `${apisHost}/v1/shape`;
 };
 
+const getPublishableKeyAuthBaseUrl = (parsed: ParsedPublishableKey): string => {
+  return parsed.region
+    ? getRegionalApisHost(parsed.decoded.environment, parsed.region)
+    : getApisHost(parsed.decoded.environment);
+};
+
 const decodePublishableKey = (publishableKey: string): ParsedPublishableKey => {
   if (publishableKey.startsWith(PUBLISHABLE_V1_PREFIX)) {
     return decodeV1PublishableKey(publishableKey);
@@ -661,7 +667,7 @@ const getRegionalApisHost = (environment: string, region: string): string => {
 
 const resolveAuthSettings = (input: {
   publishableKey?: string;
-  derived?: DecodedPublishableKey;
+  parsed?: ParsedPublishableKey;
   options: SynchiveClientOptions;
   storage: Storage;
 }): UserManagerSettings => {
@@ -673,7 +679,7 @@ const resolveAuthSettings = (input: {
     };
   }
 
-  if (!input.publishableKey || !input.derived) {
+  if (!input.publishableKey || !input.parsed) {
     throw new Error("Either auth or publishableKey must be provided.");
   }
 
@@ -681,7 +687,7 @@ const resolveAuthSettings = (input: {
     throw new Error("publishableKey auth requires a browser environment.");
   }
 
-  const authority = `${getApisHost(input.derived.environment)}/v1/auth/`;
+  const authority = `${getPublishableKeyAuthBaseUrl(input.parsed)}/v1/auth/`;
 
   const redirectUrl = getDefaultRedirectUrl();
 
