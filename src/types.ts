@@ -21,6 +21,37 @@ export type ListResult<T = ShapeRecord> = {
   pagination: Pagination;
 };
 
+export type UploadFileRequest = {
+  fileName: string;
+  contentType: string;
+  fileHiveId?: string;
+};
+
+export type UploadFileResult = {
+  fileHiveId: string;
+  fileUrl: string;
+  uploadUrl: string;
+  expiresOn: string;
+  headers: Record<string, string>;
+};
+
+export type DownloadFileResult = {
+  fileHiveId: string;
+  fileName: string;
+  fileSize: number;
+  contentType?: string;
+  downloadUrl: string;
+  expiresOn: string;
+};
+
+export type DownloadedFile = {
+  fileHiveId: string;
+  fileName: string;
+  fileSize: number;
+  contentType?: string;
+  blob: Blob;
+};
+
 export type AuthState = {
   user: User | null;
   isAuthenticated: boolean;

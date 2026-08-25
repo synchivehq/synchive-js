@@ -59,6 +59,17 @@ try {
   // Surface data errors to the user
   console.error("Data load failed:", error);
 }
+
+// File helpers
+try {
+  const uploaded = await synchive.uploadFile(file);
+  const downloaded = await synchive.downloadFile(uploaded.fileHiveId);
+  // Downloaded blob to save, preview, etc
+  await synchive.deleteFile(uploaded.fileHiveId);
+} catch (error) {
+  // Surface file errors to the user
+  console.error("File operation failed:", error);
+}
 ```
 
 Most apps only need `init()`, `onAuthStateChange()`, `signInRedirect()`, `list()`, `get()`, `create()`, and `update()`.
@@ -74,11 +85,16 @@ Common
 - `get<T>(shape: string, hiveId: string): Promise<T>`
 - `create<T>(shape: string, payload: T): Promise<T>`
 - `update<T>(shape: string, hiveId: string, payload: Partial<T> | T): Promise<T>`
+- `uploadFile(file: File, options?: { fileHiveId?: string }): Promise<{ fileHiveId: string; fileUrl: string; uploadUrl: string; expiresOn: string; headers: Record<string, string> }>`
+- `downloadFile(fileHiveId: string): Promise<{ fileHiveId: string; fileName: string; fileSize: number; contentType?: string; blob: Blob }>`
+- `deleteFile(fileHiveId: string): Promise<void>`
 
 Advanced
 
 - `signOutRedirect(): Promise<void>`
 - `getUser(): Promise<User | null>`
+- `createUploadUrl(payload: { fileName: string; contentType: string; fileHiveId?: string }): Promise<{ fileHiveId: string; fileUrl: string; uploadUrl: string; expiresOn: string; headers: Record<string, string> }>`
+- `createDownloadUrl(fileHiveId: string): Promise<{ fileHiveId: string; fileName: string; fileSize: number; contentType?: string; downloadUrl: string; expiresOn: string }>`
 
 ## Notes
 
@@ -88,4 +104,6 @@ Advanced
 - Auth lifecycle event names are exported as SDK types via `AuthStateChangeTrigger`: `"authenticated"` and `"unauthenticated"`.
 - On initial mount, the first emitted event can be either `"authenticated"` or `"unauthenticated"` depending on whether a valid session already exists.
 - If this SDK is run within an iframe, authentication uses a popup because many identity providers block login pages inside frames (`X-Frame-Options` / `frame-ancestors`). If popups are blocked, the SDK attempts to continue by redirecting the top-level page; if that is also blocked by the host iframe/browser policy, authentication fails with an explicit error.
+- `uploadFile()` / `downloadFile()` are convenience wrappers: they call `createUploadUrl()` / `createDownloadUrl()` for you, then PUT/fetch the file bytes to/from that URL.
+- `createUploadUrl()` / `createDownloadUrl()` are for when you need more control over the file transfer than `uploadFile()` / `downloadFile()` give you — e.g. tracking upload progress via `XMLHttpRequest`'s `upload.onprogress`.
 - Third-party notices are listed in `THIRD_PARTY_NOTICES.md`.

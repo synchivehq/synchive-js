@@ -9,10 +9,14 @@ import type {
   AuthStateChangeListener,
   AuthStateChangeTrigger,
   AuthStateChangeUnsubscribe,
+  DownloadedFile,
+  DownloadFileResult,
   FetchLike,
   ListParams,
   ListResult,
   SynchiveClientOptions,
+  UploadFileRequest,
+  UploadFileResult,
 } from "./types";
 
 const normalizeBaseUrl = (baseUrl: string): string => {
@@ -111,6 +115,31 @@ const defaultBuildUpdateUrl = (
   baseUrl: string,
 ): string => {
   return `${normalizeBaseUrl(baseUrl)}/${encodeURIComponent(shape)}/${encodeURIComponent(hiveId)}`;
+};
+
+const defaultBuildFilesBaseUrl = (baseUrl: string): string => {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  return normalizedBaseUrl.endsWith("/shape")
+    ? `${normalizedBaseUrl.slice(0, -"/shape".length)}/files`
+    : `${normalizedBaseUrl}/files`;
+};
+
+const defaultBuildUploadFileUrl = (baseUrl: string): string => {
+  return `${defaultBuildFilesBaseUrl(baseUrl)}/upload-url`;
+};
+
+const defaultBuildDownloadFileUrl = (
+  fileHiveId: string,
+  baseUrl: string,
+): string => {
+  return `${defaultBuildFilesBaseUrl(baseUrl)}/${encodeURIComponent(fileHiveId)}/download-url`;
+};
+
+const defaultBuildDeleteFileUrl = (
+  fileHiveId: string,
+  baseUrl: string,
+): string => {
+  return `${defaultBuildFilesBaseUrl(baseUrl)}/${encodeURIComponent(fileHiveId)}`;
 };
 
 const getDefaultStorage = (): Storage | undefined => {
@@ -294,6 +323,66 @@ export class SyncHiveClient {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
+  }
+
+  async uploadFile(
+    file: File,
+    options?: { fileHiveId?: string },
+  ): Promise<UploadFileResult> {
+    const upload = await this.createUploadUrl({
+      fileName: file.name,
+      contentType: file.type || "application/octet-stream",
+      fileHiveId: options?.fileHiveId,
+    });
+
+    const response = await this.fetchFn(upload.uploadUrl, {
+      method: "PUT",
+      headers: upload.headers,
+      body: file,
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`File upload failed (${response.status}): ${text}`);
+    }
+
+    return upload;
+  }
+
+  async downloadFile(fileHiveId: string): Promise<DownloadedFile> {
+    const download = await this.createDownloadUrl(fileHiveId);
+    const response = await this.fetchFn(download.downloadUrl);
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`File download failed (${response.status}): ${text}`);
+    }
+
+    return {
+      fileHiveId: download.fileHiveId,
+      fileName: download.fileName,
+      fileSize: download.fileSize,
+      contentType: download.contentType,
+      blob: await response.blob(),
+    };
+  }
+
+  async deleteFile(fileHiveId: string): Promise<void> {
+    const url = defaultBuildDeleteFileUrl(fileHiveId, this.apiBaseUrl);
+    return this.request<void>(url, { method: "DELETE" });
+  }
+
+  async createUploadUrl(payload: UploadFileRequest): Promise<UploadFileResult> {
+    const url = defaultBuildUploadFileUrl(this.apiBaseUrl);
+    return this.request<UploadFileResult>(url, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async createDownloadUrl(fileHiveId: string): Promise<DownloadFileResult> {
+    const url = defaultBuildDownloadFileUrl(fileHiveId, this.apiBaseUrl);
+    return this.request<DownloadFileResult>(url);
   }
 
   private async request<T>(url: string, init: RequestInit = {}): Promise<T> {
