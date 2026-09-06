@@ -56,12 +56,7 @@ const applyTenantAppBasePathToApiBaseUrl = (baseUrl: string): string => {
       return normalizeBaseUrl(url.toString());
     }
 
-    if (url.pathname.endsWith("/shape")) {
-      const prefix = url.pathname.slice(0, -"/shape".length).replace(/\/$/, "");
-      url.pathname = `${prefix}/${tenantApiPath}/shape`;
-    } else {
-      url.pathname = `${url.pathname.replace(/\/$/, "")}/${tenantApiPath}`;
-    }
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/${tenantApiPath}`;
 
     return normalizeBaseUrl(url.toString());
   } catch {
@@ -86,7 +81,7 @@ const defaultBuildListUrl = (
   baseUrl: string,
 ): string => {
   const url = new URL(
-    `${normalizeBaseUrl(baseUrl)}/${encodeURIComponent(shape)}`,
+    `${normalizeBaseUrl(baseUrl)}/shape/${encodeURIComponent(shape)}`,
   );
   if (params?.top !== undefined)
     url.searchParams.set("top", String(params.top));
@@ -102,11 +97,11 @@ const defaultBuildGetUrl = (
   hiveId: string,
   baseUrl: string,
 ): string => {
-  return `${normalizeBaseUrl(baseUrl)}/${encodeURIComponent(shape)}/${encodeURIComponent(hiveId)}`;
+  return `${normalizeBaseUrl(baseUrl)}/shape/${encodeURIComponent(shape)}/${encodeURIComponent(hiveId)}`;
 };
 
 const defaultBuildCreateUrl = (shape: string, baseUrl: string): string => {
-  return `${normalizeBaseUrl(baseUrl)}/${encodeURIComponent(shape)}`;
+  return `${normalizeBaseUrl(baseUrl)}/shape/${encodeURIComponent(shape)}`;
 };
 
 const defaultBuildUpdateUrl = (
@@ -114,14 +109,11 @@ const defaultBuildUpdateUrl = (
   hiveId: string,
   baseUrl: string,
 ): string => {
-  return `${normalizeBaseUrl(baseUrl)}/${encodeURIComponent(shape)}/${encodeURIComponent(hiveId)}`;
+  return `${normalizeBaseUrl(baseUrl)}/shape/${encodeURIComponent(shape)}/${encodeURIComponent(hiveId)}`;
 };
 
 const defaultBuildFilesBaseUrl = (baseUrl: string): string => {
-  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
-  return normalizedBaseUrl.endsWith("/shape")
-    ? `${normalizedBaseUrl.slice(0, -"/shape".length)}/files`
-    : `${normalizedBaseUrl}/files`;
+  return `${normalizeBaseUrl(baseUrl)}/files`;
 };
 
 const defaultBuildUploadFileUrl = (baseUrl: string): string => {
@@ -648,10 +640,10 @@ const getPublishableKeyApiBaseUrl = (parsed: ParsedPublishableKey): string => {
     : getApisHost(parsed.decoded.environment);
 
   if (parsed.decoded.tenantHiveId) {
-    return `${apisHost}/v1/hives/${encodeURIComponent(parsed.decoded.tenantHiveId)}/shape`;
+    return `${apisHost}/v1/hives/${encodeURIComponent(parsed.decoded.tenantHiveId)}`;
   }
 
-  return `${apisHost}/v1/shape`;
+  return `${apisHost}/v1`;
 };
 
 const getPublishableKeyAuthBaseUrl = (parsed: ParsedPublishableKey): string => {
