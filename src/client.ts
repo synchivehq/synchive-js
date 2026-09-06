@@ -332,12 +332,13 @@ export class SyncHiveClient {
     const upload = await this.createUploadUrl({
       fileName: file.name,
       contentType: file.type || "application/octet-stream",
+      fileSize: file.size,
       fileHiveId: options?.fileHiveId,
     });
 
     const response = await this.fetchFn(upload.uploadUrl, {
       method: "PUT",
-      headers: upload.headers,
+      headers: { "X-SH-Upload-Token": upload.uploadToken },
       body: file,
     });
 
@@ -351,7 +352,9 @@ export class SyncHiveClient {
 
   async downloadFile(fileHiveId: string): Promise<DownloadedFile> {
     const download = await this.createDownloadUrl(fileHiveId);
-    const response = await this.fetchFn(download.downloadUrl);
+    const response = await this.fetchFn(download.downloadUrl, {
+      headers: { "X-SH-Download-Token": download.downloadToken },
+    });
 
     if (!response.ok) {
       const text = await response.text();

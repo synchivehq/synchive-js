@@ -24,15 +24,15 @@ export type ListResult<T = ShapeRecord> = {
 export type UploadFileRequest = {
   fileName: string;
   contentType: string;
+  fileSize: number;
   fileHiveId?: string;
 };
 
 export type UploadFileResult = {
   fileHiveId: string;
-  fileUrl: string;
   uploadUrl: string;
+  uploadToken: string;
   expiresOn: string;
-  headers: Record<string, string>;
 };
 
 export type DownloadFileResult = {
@@ -41,6 +41,7 @@ export type DownloadFileResult = {
   fileSize: number;
   contentType?: string;
   downloadUrl: string;
+  downloadToken: string;
   expiresOn: string;
 };
 

@@ -85,7 +85,7 @@ Common
 - `get<T>(shape: string, hiveId: string): Promise<T>`
 - `create<T>(shape: string, payload: T): Promise<T>`
 - `update<T>(shape: string, hiveId: string, payload: Partial<T> | T): Promise<T>`
-- `uploadFile(file: File, options?: { fileHiveId?: string }): Promise<{ fileHiveId: string; fileUrl: string; uploadUrl: string; expiresOn: string; headers: Record<string, string> }>`
+- `uploadFile(file: File, options?: { fileHiveId?: string }): Promise<{ fileHiveId: string; uploadUrl: string; uploadToken: string; expiresOn: string }>`
 - `downloadFile(fileHiveId: string): Promise<{ fileHiveId: string; fileName: string; fileSize: number; contentType?: string; blob: Blob }>`
 - `deleteFile(fileHiveId: string): Promise<void>`
 
@@ -93,8 +93,8 @@ Advanced
 
 - `signOutRedirect(): Promise<void>`
 - `getUser(): Promise<User | null>`
-- `createUploadUrl(payload: { fileName: string; contentType: string; fileHiveId?: string }): Promise<{ fileHiveId: string; fileUrl: string; uploadUrl: string; expiresOn: string; headers: Record<string, string> }>`
-- `createDownloadUrl(fileHiveId: string): Promise<{ fileHiveId: string; fileName: string; fileSize: number; contentType?: string; downloadUrl: string; expiresOn: string }>`
+- `createUploadUrl(payload: { fileName: string; contentType: string; fileSize: number; fileHiveId?: string }): Promise<{ fileHiveId: string; uploadUrl: string; uploadToken: string; expiresOn: string }>`
+- `createDownloadUrl(fileHiveId: string): Promise<{ fileHiveId: string; fileName: string; fileSize: number; contentType?: string; downloadUrl: string; downloadToken: string; expiresOn: string }>`
 
 ## Notes
 
