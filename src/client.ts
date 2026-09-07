@@ -338,9 +338,7 @@ export class SyncHiveClient {
 
   async downloadFile(fileHiveId: string): Promise<DownloadedFile> {
     const download = await this.createDownloadUrl(fileHiveId);
-    const response = await this.fetchFn(download.downloadUrl, {
-      headers: { "X-SH-Download-Token": download.downloadToken },
-    });
+    const response = await this.fetchFn(download.downloadUrl);
 
     if (!response.ok) {
       const text = await response.text();

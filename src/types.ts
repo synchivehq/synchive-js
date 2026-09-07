@@ -41,7 +41,6 @@ export type DownloadFileResult = {
   fileSize: number;
   contentType?: string;
   downloadUrl: string;
-  downloadToken: string;
   expiresOn: string;
 };
 
