@@ -152,20 +152,14 @@ export class SyncHiveClient {
 
   constructor(options: SynchiveClientOptions) {
     const publishableKey = options.publishableKey?.trim();
-    const parsedPublishableKey = publishableKey
-      ? decodePublishableKey(publishableKey)
-      : undefined;
-    const derivedApiBaseUrl = parsedPublishableKey
-      ? applyTenantAppBasePathToApiBaseUrl(
-          getPublishableKeyApiBaseUrl(parsedPublishableKey),
-        )
-      : undefined;
-    const apiBaseUrl = options.apiBaseUrl ?? derivedApiBaseUrl;
-    if (!apiBaseUrl) {
-      throw new Error(
-        "apiBaseUrl is required (or provide publishableKey to derive it).",
-      );
+    if (!publishableKey) {
+      throw new Error("publishableKey is required.");
     }
+
+    const parsedPublishableKey = decodePublishableKey(publishableKey);
+    const apiBaseUrl = applyTenantAppBasePathToApiBaseUrl(
+      getPublishableKeyApiBaseUrl(parsedPublishableKey),
+    );
 
     const storage = options.storage ?? getDefaultStorage();
     if (!storage) {
@@ -182,7 +176,7 @@ export class SyncHiveClient {
     });
 
     this.userManager = new UserManager(auth);
-    this.apiBaseUrl = applyTenantAppBasePathToApiBaseUrl(apiBaseUrl);
+    this.apiBaseUrl = apiBaseUrl;
     this.fetchFn = options.fetch ?? getDefaultFetch();
   }
 
@@ -750,8 +744,8 @@ const getRegionalApisHost = (environment: string, region: string): string => {
 };
 
 const resolveAuthSettings = (input: {
-  publishableKey?: string;
-  parsed?: ParsedPublishableKey;
+  publishableKey: string;
+  parsed: ParsedPublishableKey;
   options: SynchiveClientOptions;
   storage: Storage;
 }): UserManagerSettings => {
@@ -761,10 +755,6 @@ const resolveAuthSettings = (input: {
       userStore: new WebStorageStateStore({ store: input.storage }),
       stateStore: new WebStorageStateStore({ store: input.storage }),
     };
-  }
-
-  if (!input.publishableKey || !input.parsed) {
-    throw new Error("Either auth or publishableKey must be provided.");
   }
 
   if (typeof window === "undefined") {

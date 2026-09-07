@@ -72,8 +72,7 @@ export type AuthStateChangeUnsubscribe = () => void;
 export type FetchLike = typeof fetch;
 
 export type SynchiveClientOptions = {
-  publishableKey?: string;
-  apiBaseUrl?: string;
+  publishableKey: string;
   auth?: UserManagerSettings;
   authOverrides?: Partial<UserManagerSettings>;
   storage?: Storage;
