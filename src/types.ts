@@ -21,6 +21,37 @@ export type ListResult<T = ShapeRecord> = {
   pagination: Pagination;
 };
 
+export type UploadFileRequest = {
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  fileHiveId?: string;
+};
+
+export type UploadFileResult = {
+  fileHiveId: string;
+  uploadUrl: string;
+  uploadToken: string;
+  expiresOn: string;
+};
+
+export type DownloadFileResult = {
+  fileHiveId: string;
+  fileName: string;
+  fileSize: number;
+  contentType?: string;
+  downloadUrl: string;
+  expiresOn: string;
+};
+
+export type DownloadedFile = {
+  fileHiveId: string;
+  fileName: string;
+  fileSize: number;
+  contentType?: string;
+  blob: Blob;
+};
+
 export type AuthState = {
   user: User | null;
   isAuthenticated: boolean;
@@ -40,8 +71,7 @@ export type AuthStateChangeUnsubscribe = () => void;
 export type FetchLike = typeof fetch;
 
 export type SynchiveClientOptions = {
-  publishableKey?: string;
-  apiBaseUrl?: string;
+  publishableKey: string;
   auth?: UserManagerSettings;
   authOverrides?: Partial<UserManagerSettings>;
   storage?: Storage;

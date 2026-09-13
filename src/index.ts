@@ -4,7 +4,11 @@ export type {
   AuthStateChangeListener,
   AuthStateChangeTrigger,
   AuthStateChangeUnsubscribe,
+  DownloadedFile,
+  DownloadFileResult,
   ListParams,
   ListResult,
   SynchiveClientOptions,
+  UploadFileRequest,
+  UploadFileResult,
 } from "./types";

@@ -9,10 +9,14 @@ import type {
   AuthStateChangeListener,
   AuthStateChangeTrigger,
   AuthStateChangeUnsubscribe,
+  DownloadedFile,
+  DownloadFileResult,
   FetchLike,
   ListParams,
   ListResult,
   SynchiveClientOptions,
+  UploadFileRequest,
+  UploadFileResult,
 } from "./types";
 
 const normalizeBaseUrl = (baseUrl: string): string => {
@@ -52,12 +56,7 @@ const applyTenantAppBasePathToApiBaseUrl = (baseUrl: string): string => {
       return normalizeBaseUrl(url.toString());
     }
 
-    if (url.pathname.endsWith("/shape")) {
-      const prefix = url.pathname.slice(0, -"/shape".length).replace(/\/$/, "");
-      url.pathname = `${prefix}/${tenantApiPath}/shape`;
-    } else {
-      url.pathname = `${url.pathname.replace(/\/$/, "")}/${tenantApiPath}`;
-    }
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/${tenantApiPath}`;
 
     return normalizeBaseUrl(url.toString());
   } catch {
@@ -82,7 +81,7 @@ const defaultBuildListUrl = (
   baseUrl: string,
 ): string => {
   const url = new URL(
-    `${normalizeBaseUrl(baseUrl)}/${encodeURIComponent(shape)}`,
+    `${normalizeBaseUrl(baseUrl)}/shape/${encodeURIComponent(shape)}`,
   );
   if (params?.top !== undefined)
     url.searchParams.set("top", String(params.top));
@@ -98,11 +97,11 @@ const defaultBuildGetUrl = (
   hiveId: string,
   baseUrl: string,
 ): string => {
-  return `${normalizeBaseUrl(baseUrl)}/${encodeURIComponent(shape)}/${encodeURIComponent(hiveId)}`;
+  return `${normalizeBaseUrl(baseUrl)}/shape/${encodeURIComponent(shape)}/${encodeURIComponent(hiveId)}`;
 };
 
 const defaultBuildCreateUrl = (shape: string, baseUrl: string): string => {
-  return `${normalizeBaseUrl(baseUrl)}/${encodeURIComponent(shape)}`;
+  return `${normalizeBaseUrl(baseUrl)}/shape/${encodeURIComponent(shape)}`;
 };
 
 const defaultBuildUpdateUrl = (
@@ -110,7 +109,29 @@ const defaultBuildUpdateUrl = (
   hiveId: string,
   baseUrl: string,
 ): string => {
-  return `${normalizeBaseUrl(baseUrl)}/${encodeURIComponent(shape)}/${encodeURIComponent(hiveId)}`;
+  return `${normalizeBaseUrl(baseUrl)}/shape/${encodeURIComponent(shape)}/${encodeURIComponent(hiveId)}`;
+};
+
+const defaultBuildFilesBaseUrl = (baseUrl: string): string => {
+  return `${normalizeBaseUrl(baseUrl)}/files`;
+};
+
+const defaultBuildUploadFileUrl = (baseUrl: string): string => {
+  return `${defaultBuildFilesBaseUrl(baseUrl)}/upload-url`;
+};
+
+const defaultBuildDownloadFileUrl = (
+  fileHiveId: string,
+  baseUrl: string,
+): string => {
+  return `${defaultBuildFilesBaseUrl(baseUrl)}/${encodeURIComponent(fileHiveId)}/download-url`;
+};
+
+const defaultBuildDeleteFileUrl = (
+  fileHiveId: string,
+  baseUrl: string,
+): string => {
+  return `${defaultBuildFilesBaseUrl(baseUrl)}/${encodeURIComponent(fileHiveId)}`;
 };
 
 const getDefaultStorage = (): Storage | undefined => {
@@ -131,20 +152,14 @@ export class SyncHiveClient {
 
   constructor(options: SynchiveClientOptions) {
     const publishableKey = options.publishableKey?.trim();
-    const parsedPublishableKey = publishableKey
-      ? decodePublishableKey(publishableKey)
-      : undefined;
-    const derivedApiBaseUrl = parsedPublishableKey
-      ? applyTenantAppBasePathToApiBaseUrl(
-          getPublishableKeyApiBaseUrl(parsedPublishableKey),
-        )
-      : undefined;
-    const apiBaseUrl = options.apiBaseUrl ?? derivedApiBaseUrl;
-    if (!apiBaseUrl) {
-      throw new Error(
-        "apiBaseUrl is required (or provide publishableKey to derive it).",
-      );
+    if (!publishableKey) {
+      throw new Error("publishableKey is required.");
     }
+
+    const parsedPublishableKey = decodePublishableKey(publishableKey);
+    const apiBaseUrl = applyTenantAppBasePathToApiBaseUrl(
+      getPublishableKeyApiBaseUrl(parsedPublishableKey),
+    );
 
     const storage = options.storage ?? getDefaultStorage();
     if (!storage) {
@@ -161,7 +176,7 @@ export class SyncHiveClient {
     });
 
     this.userManager = new UserManager(auth);
-    this.apiBaseUrl = applyTenantAppBasePathToApiBaseUrl(apiBaseUrl);
+    this.apiBaseUrl = apiBaseUrl;
     this.fetchFn = options.fetch ?? getDefaultFetch();
   }
 
@@ -294,6 +309,67 @@ export class SyncHiveClient {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
+  }
+
+  async uploadFile(
+    file: File,
+    options?: { fileHiveId?: string },
+  ): Promise<UploadFileResult> {
+    const upload = await this.createUploadUrl({
+      fileName: file.name,
+      contentType: file.type || "application/octet-stream",
+      fileSize: file.size,
+      fileHiveId: options?.fileHiveId,
+    });
+
+    const response = await this.fetchFn(upload.uploadUrl, {
+      method: "PUT",
+      headers: { "X-SH-Upload-Token": upload.uploadToken },
+      body: file,
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`File upload failed (${response.status}): ${text}`);
+    }
+
+    return upload;
+  }
+
+  async downloadFile(fileHiveId: string): Promise<DownloadedFile> {
+    const download = await this.createDownloadUrl(fileHiveId);
+    const response = await this.fetchFn(download.downloadUrl);
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`File download failed (${response.status}): ${text}`);
+    }
+
+    return {
+      fileHiveId: download.fileHiveId,
+      fileName: download.fileName,
+      fileSize: download.fileSize,
+      contentType: download.contentType,
+      blob: await response.blob(),
+    };
+  }
+
+  async deleteFile(fileHiveId: string): Promise<void> {
+    const url = defaultBuildDeleteFileUrl(fileHiveId, this.apiBaseUrl);
+    return this.request<void>(url, { method: "DELETE" });
+  }
+
+  async createUploadUrl(payload: UploadFileRequest): Promise<UploadFileResult> {
+    const url = defaultBuildUploadFileUrl(this.apiBaseUrl);
+    return this.request<UploadFileResult>(url, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async createDownloadUrl(fileHiveId: string): Promise<DownloadFileResult> {
+    const url = defaultBuildDownloadFileUrl(fileHiveId, this.apiBaseUrl);
+    return this.request<DownloadFileResult>(url);
   }
 
   private async request<T>(url: string, init: RequestInit = {}): Promise<T> {
@@ -556,10 +632,10 @@ const getPublishableKeyApiBaseUrl = (parsed: ParsedPublishableKey): string => {
     : getApisHost(parsed.decoded.environment);
 
   if (parsed.decoded.tenantHiveId) {
-    return `${apisHost}/v1/hives/${encodeURIComponent(parsed.decoded.tenantHiveId)}/shape`;
+    return `${apisHost}/v1/hives/${encodeURIComponent(parsed.decoded.tenantHiveId)}`;
   }
 
-  return `${apisHost}/v1/shape`;
+  return `${apisHost}/v1`;
 };
 
 const getPublishableKeyAuthBaseUrl = (parsed: ParsedPublishableKey): string => {
@@ -666,8 +742,8 @@ const getRegionalApisHost = (environment: string, region: string): string => {
 };
 
 const resolveAuthSettings = (input: {
-  publishableKey?: string;
-  parsed?: ParsedPublishableKey;
+  publishableKey: string;
+  parsed: ParsedPublishableKey;
   options: SynchiveClientOptions;
   storage: Storage;
 }): UserManagerSettings => {
@@ -677,10 +753,6 @@ const resolveAuthSettings = (input: {
       userStore: new WebStorageStateStore({ store: input.storage }),
       stateStore: new WebStorageStateStore({ store: input.storage }),
     };
-  }
-
-  if (!input.publishableKey || !input.parsed) {
-    throw new Error("Either auth or publishableKey must be provided.");
   }
 
   if (typeof window === "undefined") {
