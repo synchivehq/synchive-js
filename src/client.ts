@@ -1,9 +1,5 @@
-import {
-  UserManager,
-  WebStorageStateStore,
-  type User,
-  type UserManagerSettings,
-} from "oidc-client-ts";
+import { PasswordAuth, type PasswordCredentials } from "./auth/password";
+import { decodePublishableKey, getApiBaseUrl } from "./publishableKey";
 import type {
   AuthState,
   AuthStateChangeListener,
@@ -14,66 +10,12 @@ import type {
   FetchLike,
   ListParams,
   ListResult,
+  SyncHiveUser,
   SynchiveClientOptions,
   UploadFileRequest,
   UploadFileResult,
 } from "./types";
-
-const normalizeBaseUrl = (baseUrl: string): string => {
-  if (!baseUrl) return "";
-  return baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-};
-
-const tenantAppBasePathPattern = /^\/workspace\/[^/]+\/hive\/[^/]+/;
-
-const getTenantAppBasePath = (pathname?: string): string => {
-  if (pathname) {
-    const match = pathname.match(tenantAppBasePathPattern);
-    return match?.[0] ?? "";
-  }
-
-  if (typeof window === "undefined") return "";
-  return getTenantAppBasePath(window.location.pathname);
-};
-
-const applyTenantAppBasePathToApiBaseUrl = (baseUrl: string): string => {
-  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
-  const tenantAppBasePath = getTenantAppBasePath();
-
-  if (!normalizedBaseUrl || !tenantAppBasePath) {
-    return normalizedBaseUrl;
-  }
-
-  const tenantApiPath = tenantAppBasePath.replace(/^\//, "");
-
-  try {
-    const url = new URL(
-      normalizedBaseUrl,
-      typeof window === "undefined" ? undefined : window.location.origin,
-    );
-
-    if (url.pathname.includes(`/${tenantApiPath}`)) {
-      return normalizeBaseUrl(url.toString());
-    }
-
-    url.pathname = `${url.pathname.replace(/\/$/, "")}/${tenantApiPath}`;
-
-    return normalizeBaseUrl(url.toString());
-  } catch {
-    return normalizedBaseUrl;
-  }
-};
-
-const getDefaultRedirectUrl = (): string => {
-  if (typeof window === "undefined") {
-    throw new Error("Browser redirects require a window environment.");
-  }
-
-  return new URL(
-    getTenantAppBasePath() || "/",
-    window.location.origin,
-  ).toString();
-};
+import { applyTenantAppBasePathToApiBaseUrl, normalizeBaseUrl } from "./urls";
 
 const defaultBuildListUrl = (
   shape: string,
@@ -148,7 +90,7 @@ const getDefaultFetch = (): FetchLike => {
 export class SyncHiveClient {
   private readonly apiBaseUrl: string;
   private readonly fetchFn: FetchLike;
-  private readonly userManager: UserManager;
+  private readonly auth: PasswordAuth;
 
   constructor(options: SynchiveClientOptions) {
     const publishableKey = options.publishableKey?.trim();
@@ -158,7 +100,7 @@ export class SyncHiveClient {
 
     const parsedPublishableKey = decodePublishableKey(publishableKey);
     const apiBaseUrl = applyTenantAppBasePathToApiBaseUrl(
-      getPublishableKeyApiBaseUrl(parsedPublishableKey),
+      getApiBaseUrl(parsedPublishableKey),
     );
 
     const storage = options.storage ?? getDefaultStorage();
@@ -168,117 +110,43 @@ export class SyncHiveClient {
       );
     }
 
-    const auth = resolveAuthSettings({
-      publishableKey,
-      parsed: parsedPublishableKey,
-      options,
-      storage,
-    });
-
-    this.userManager = new UserManager(auth);
     this.apiBaseUrl = apiBaseUrl;
     this.fetchFn = options.fetch ?? getDefaultFetch();
+    this.auth = new PasswordAuth({
+      publishableKey,
+      parsed: parsedPublishableKey,
+      storage,
+      fetchFn: this.fetchFn,
+    });
   }
 
   async init(): Promise<void> {
-    const hasCallbackParams = this.isRedirectCallback();
-    const isSignOutCallback =
-      hasCallbackParams && this.isSignOutRedirectCallback();
-    const isPopupWindow = this.isPopupContext();
-    if (!hasCallbackParams) {
-      if (isPopupWindow) {
-        // Close stale popup callback windows that no longer have auth params.
-        window.close();
-      }
-      return;
-    }
-
-    try {
-      await this.handleAuthCallback(isSignOutCallback);
-      if (hasCallbackParams) {
-        this.clearAuthParamsFromUrl();
-      }
-    } catch (error) {
-      // Some preview/router setups strip popup callback params. Close that stale popup.
-      if (isPopupWindow && this.isMissingCallbackStateError(error)) {
-        window.close();
-        return;
-      }
-      throw error;
-    }
+    await this.auth.init();
   }
 
-  async signInRedirect(): Promise<void> {
-    if (this.isInIframe()) {
-      await this.signInWithPopupOrRedirectFallback();
-      return;
-    }
-
-    await this.signInWithRedirect();
+  async signInWithPassword(credentials: PasswordCredentials): Promise<void> {
+    await this.auth.signInWithPassword(credentials);
   }
 
-  async signOutRedirect(): Promise<void> {
-    await this.userManager.signoutRedirect();
+  /** Registers the user; they are signed in after following the confirmation email back to the app. */
+  async signUpWithPassword(credentials: PasswordCredentials): Promise<void> {
+    await this.auth.signUpWithPassword(credentials);
   }
 
-  async getUser(): Promise<User | null> {
-    return this.userManager.getUser();
+  async signOut(): Promise<void> {
+    await this.auth.signOut();
+  }
+
+  async getUser(): Promise<SyncHiveUser | null> {
+    return this.auth.getUser();
   }
 
   onAuthStateChange(
     listener: AuthStateChangeListener,
   ): AuthStateChangeUnsubscribe {
-    const events = this.userManager.events;
-    let isSubscribed = true;
-
-    const emitState = (user: User | null): void => {
-      if (!isSubscribed) return;
-      const trigger = this.toAuthStateChangeTrigger(user);
-      listener(this.toAuthState(user), trigger);
-    };
-
-    const emitCurrentState = async (): Promise<void> => {
-      const user = await this.userManager.getUser();
-      if (!isSubscribed) return;
-      emitState(user);
-    };
-
-    const handleUserLoaded = (user: User): void => {
-      emitState(user);
-    };
-
-    const handleUserUnloaded = (): void => {
-      void emitCurrentState();
-    };
-
-    const handleUserSignedOut = (): void => {
-      void emitCurrentState();
-    };
-
-    const handleAccessTokenExpired = (): void => {
-      void emitCurrentState();
-    };
-
-    const handleSilentRenewError = (): void => {
-      void emitCurrentState();
-    };
-
-    events.addUserLoaded(handleUserLoaded);
-    events.addUserUnloaded(handleUserUnloaded);
-    events.addUserSignedOut(handleUserSignedOut);
-    events.addAccessTokenExpired(handleAccessTokenExpired);
-    events.addSilentRenewError(handleSilentRenewError);
-
-    void emitCurrentState();
-
-    return () => {
-      isSubscribed = false;
-      events.removeUserLoaded(handleUserLoaded);
-      events.removeUserUnloaded(handleUserUnloaded);
-      events.removeUserSignedOut(handleUserSignedOut);
-      events.removeAccessTokenExpired(handleAccessTokenExpired);
-      events.removeSilentRenewError(handleSilentRenewError);
-    };
+    return this.auth.onUserChange((user) => {
+      listener(this.toAuthState(user), this.toAuthStateChangeTrigger(user));
+    });
   }
 
   async list<T>(shape: string, params?: ListParams): Promise<ListResult<T>> {
@@ -373,10 +241,8 @@ export class SyncHiveClient {
   }
 
   private async request<T>(url: string, init: RequestInit = {}): Promise<T> {
-    const user = await this.ensureUser();
-    const token = user.access_token;
     const headers = new Headers(init.headers ?? {});
-    headers.set("Authorization", `Bearer ${token}`);
+    await this.auth.authorize(headers);
     headers.set("Accept", "application/json");
 
     if (init.body && !headers.has("Content-Type")) {
@@ -400,383 +266,17 @@ export class SyncHiveClient {
     return response.json() as Promise<T>;
   }
 
-  private async ensureUser(): Promise<User> {
-    const user = await this.userManager.getUser();
-    if (this.isAuthenticatedUser(user)) return user;
-
-    try {
-      const renewed = await this.userManager.signinSilent();
-      if (this.isAuthenticatedUser(renewed)) return renewed;
-    } catch {
-      // Silent renew can fail for expected reasons (expired OP session, blocked cookies).
-    }
-
-    throw new Error("User is not authenticated. Call signInRedirect() first.");
-  }
-
-  private toAuthState(user: User | null): AuthState {
-    const activeUser = this.isAuthenticatedUser(user) ? user : null;
+  private toAuthState(user: SyncHiveUser | null): AuthState {
+    const activeUser = user && !user.expired ? user : null;
     return {
       user: activeUser,
       isAuthenticated: !!activeUser,
     };
   }
 
-  private toAuthStateChangeTrigger(user: User | null): AuthStateChangeTrigger {
-    return this.isAuthenticatedUser(user) ? "authenticated" : "unauthenticated";
-  }
-
-  private isAuthenticatedUser(user: User | null): user is User {
-    if (!user) return false;
-    if (user.expired === true) return false;
-    if (typeof user.access_token !== "string") return false;
-    return user.access_token.trim().length > 0;
-  }
-
-  private isRedirectCallback(): boolean {
-    if (typeof window === "undefined") return false;
-    if (!window.location) return false;
-
-    const params = this.getAuthParamsFromLocation();
-    return (
-      params.has("code") ||
-      params.has("state") ||
-      params.has("error") ||
-      params.has("id_token")
-    );
-  }
-
-  private isSignOutRedirectCallback(): boolean {
-    if (typeof window === "undefined") return false;
-    if (!window.location) return false;
-
-    const params = this.getAuthParamsFromLocation();
-    return (
-      params.has("state") &&
-      !params.has("code") &&
-      !params.has("id_token") &&
-      !params.has("error")
-    );
-  }
-
-  private getAuthParamsFromLocation(): URLSearchParams {
-    if (typeof window === "undefined") return new URLSearchParams();
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.toString()) return params;
-
-    const hash = window.location.hash;
-    if (!hash) return params;
-
-    const hashValue = hash.startsWith("#") ? hash.slice(1) : hash;
-    const queryIndex = hashValue.indexOf("?");
-    if (queryIndex >= 0) {
-      return new URLSearchParams(hashValue.slice(queryIndex + 1));
-    }
-
-    // Some providers/router stacks place auth params directly in the hash fragment.
-    if (hashValue.includes("code=") || hashValue.includes("state=")) {
-      return new URLSearchParams(hashValue);
-    }
-
-    return params;
-  }
-
-  private isInIframe(): boolean {
-    if (typeof window === "undefined") return false;
-    try {
-      return window.self !== window.top;
-    } catch {
-      // Cross-origin frame access throws here; treat it as framed.
-      return true;
-    }
-  }
-
-  private isPopupContext(): boolean {
-    if (typeof window === "undefined") return false;
-    return !!window.opener && window.opener !== window;
-  }
-
-  private isMissingCallbackStateError(error: unknown): boolean {
-    if (!(error instanceof Error)) return false;
-    const message = error.message.toLowerCase().replace(/\s+/g, " ").trim();
-
-    const knownStateErrors = [
-      "no state in response",
-      "no matching state found in storage",
-      "state not found in storage",
-      "invalid response_type in state",
-    ];
-
-    return knownStateErrors.some((text) => message.includes(text));
-  }
-
-  private async signInWithPopupOrRedirectFallback(): Promise<void> {
-    try {
-      await this.userManager.signinPopup();
-      return;
-    } catch (error) {
-      if (!this.shouldFallbackFromPopup(error)) {
-        throw error;
-      }
-    }
-
-    await this.signInWithRedirect();
-  }
-
-  private shouldFallbackFromPopup(error: unknown): boolean {
-    if (!(error instanceof Error)) return false;
-    const message = error.message.toLowerCase();
-    return (
-      message.includes("popup") ||
-      message.includes("window closed") ||
-      message.includes("window.open returned null")
-    );
-  }
-
-  private async signInWithRedirect(): Promise<void> {
-    const isIframe = typeof window !== "undefined" && this.isInIframe();
-    try {
-      await this.userManager.signinRedirect({
-        redirectTarget: isIframe ? "top" : "self",
-        redirectMethod: "assign",
-      });
-    } catch {
-      if (isIframe) {
-        throw new Error(
-          "Embedded login blocked by frame policy. Popup auth failed and top-level navigation is not allowed in this iframe.",
-        );
-      }
-      throw new Error("Sign-in redirect failed.");
-    }
-  }
-
-  private clearAuthParamsFromUrl(): void {
-    if (typeof window === "undefined") return;
-    if (!window.history?.replaceState) return;
-
-    const url = new URL(window.location.href);
-    url.searchParams.delete("code");
-    url.searchParams.delete("state");
-    url.searchParams.delete("session_state");
-    url.searchParams.delete("error");
-    url.searchParams.delete("error_description");
-
-    const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
-    if (hash) {
-      const queryIndex = hash.indexOf("?");
-      if (queryIndex >= 0) {
-        const route = hash.slice(0, queryIndex);
-        const hashParams = new URLSearchParams(hash.slice(queryIndex + 1));
-        hashParams.delete("code");
-        hashParams.delete("state");
-        hashParams.delete("session_state");
-        hashParams.delete("error");
-        hashParams.delete("error_description");
-        const cleaned = hashParams.toString();
-        url.hash = route
-          ? cleaned
-            ? `#${route}?${cleaned}`
-            : `#${route}`
-          : cleaned
-            ? `#${cleaned}`
-            : "";
-      } else if (hash.includes("=")) {
-        const hashParams = new URLSearchParams(hash);
-        hashParams.delete("code");
-        hashParams.delete("state");
-        hashParams.delete("session_state");
-        hashParams.delete("error");
-        hashParams.delete("error_description");
-        const cleaned = hashParams.toString();
-        url.hash = cleaned ? `#${cleaned}` : "";
-      }
-    }
-
-    window.history.replaceState({}, document.title, url.toString());
-  }
-
-  private async handleAuthCallback(isSignOutCallback: boolean): Promise<void> {
-    if (isSignOutCallback) {
-      await this.userManager.signoutRedirectCallback();
-      await this.userManager.removeUser();
-      return;
-    }
-
-    if (this.isPopupContext()) {
-      await this.userManager.signinPopupCallback();
-      return;
-    }
-
-    await this.userManager.signinCallback();
+  private toAuthStateChangeTrigger(
+    user: SyncHiveUser | null,
+  ): AuthStateChangeTrigger {
+    return user && !user.expired ? "authenticated" : "unauthenticated";
   }
 }
-
-type DecodedPublishableKey = {
-  encryptedKey: string;
-  environment: string;
-  tenantHiveId?: string;
-};
-
-type ParsedPublishableKey = {
-  decoded: DecodedPublishableKey;
-  region?: string;
-};
-
-const PUBLISHABLE_PREFIX = "sh_publishable_";
-const PUBLISHABLE_V1_PREFIX = "sh_publishable_v1_";
-
-const getPublishableKeyApiBaseUrl = (parsed: ParsedPublishableKey): string => {
-  const apisHost = parsed.region
-    ? getRegionalApisHost(parsed.decoded.environment, parsed.region)
-    : getApisHost(parsed.decoded.environment);
-
-  if (parsed.decoded.tenantHiveId) {
-    return `${apisHost}/v1/hives/${encodeURIComponent(parsed.decoded.tenantHiveId)}`;
-  }
-
-  return `${apisHost}/v1`;
-};
-
-const getPublishableKeyAuthBaseUrl = (parsed: ParsedPublishableKey): string => {
-  return parsed.region
-    ? getRegionalApisHost(parsed.decoded.environment, parsed.region)
-    : getApisHost(parsed.decoded.environment);
-};
-
-const decodePublishableKey = (publishableKey: string): ParsedPublishableKey => {
-  if (publishableKey.startsWith(PUBLISHABLE_V1_PREFIX)) {
-    return decodeV1PublishableKey(publishableKey);
-  }
-
-  if (publishableKey.startsWith(PUBLISHABLE_PREFIX)) {
-    return {
-      decoded: decodeLegacyPublishableKey(publishableKey),
-    };
-  }
-
-  throw new Error("publishableKey is invalid or missing required prefix.");
-};
-
-const decodeV1PublishableKey = (
-  publishableKey: string,
-): ParsedPublishableKey => {
-  const keyContents = publishableKey.slice(PUBLISHABLE_V1_PREFIX.length);
-  const regionSeparatorIndex = keyContents.indexOf("_");
-  const hasRegion = regionSeparatorIndex > 0;
-  const hasPayload = regionSeparatorIndex < keyContents.length - 1;
-
-  if (!hasRegion || !hasPayload) {
-    throw new Error("publishableKey is missing region or payload.");
-  }
-
-  const region = keyContents.slice(0, regionSeparatorIndex);
-  const encoded = keyContents.slice(regionSeparatorIndex + 1);
-  let decoded: string;
-  try {
-    decoded = atob(normalizeBase64(encoded));
-  } catch {
-    throw new Error("publishableKey is not valid base64.");
-  }
-
-  const parts = decoded.split("::");
-  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
-    throw new Error("publishableKey payload is invalid.");
-  }
-
-  return {
-    region,
-    decoded: {
-      environment: parts[0],
-      tenantHiveId: parts[1],
-      encryptedKey: parts[2],
-    },
-  };
-};
-
-const decodeLegacyPublishableKey = (
-  publishableKey: string,
-): DecodedPublishableKey => {
-  const encoded = publishableKey.slice(PUBLISHABLE_PREFIX.length);
-  let decoded: string;
-  try {
-    decoded = atob(normalizeBase64(encoded));
-  } catch {
-    throw new Error("publishableKey is not valid base64.");
-  }
-
-  const parts = decoded.split("::");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new Error("publishableKey payload is invalid.");
-  }
-
-  return {
-    encryptedKey: parts[0],
-    environment: parts[1],
-  };
-};
-
-const normalizeBase64 = (value: string): string => {
-  // Accept base64url and legacy variants seen in externally supplied keys.
-  let normalized = value
-    .replace(/-/g, "+")
-    .replace(/_/g, "/")
-    .replace(/\|/g, "/");
-  const padding = normalized.length % 4;
-  if (padding) {
-    normalized += "=".repeat(4 - padding);
-  }
-  return normalized;
-};
-
-const getApisHost = (environment: string): string => {
-  return environment === "prod"
-    ? "https://apis.synchive.com"
-    : `https://apis.${environment}.synchive.com`;
-};
-
-const getRegionalApisHost = (environment: string, region: string): string => {
-  return environment === "prod"
-    ? `https://${region}-apis.synchive.com`
-    : `https://${region}-apis.${environment}.synchive.com`;
-};
-
-const resolveAuthSettings = (input: {
-  publishableKey: string;
-  parsed: ParsedPublishableKey;
-  options: SynchiveClientOptions;
-  storage: Storage;
-}): UserManagerSettings => {
-  if (input.options.auth) {
-    return {
-      ...input.options.auth,
-      userStore: new WebStorageStateStore({ store: input.storage }),
-      stateStore: new WebStorageStateStore({ store: input.storage }),
-    };
-  }
-
-  if (typeof window === "undefined") {
-    throw new Error("publishableKey auth requires a browser environment.");
-  }
-
-  const authority = `${getPublishableKeyAuthBaseUrl(input.parsed)}/v1/auth/`;
-
-  const redirectUrl = getDefaultRedirectUrl();
-
-  const defaults: UserManagerSettings = {
-    authority,
-    client_id: input.publishableKey,
-    redirect_uri: redirectUrl,
-    silent_redirect_uri: redirectUrl,
-    post_logout_redirect_uri: redirectUrl,
-    response_type: "code",
-    scope: "openid profile offline_access",
-  };
-
-  return {
-    ...defaults,
-    ...input.options.authOverrides,
-    userStore: new WebStorageStateStore({ store: input.storage }),
-    stateStore: new WebStorageStateStore({ store: input.storage }),
-  };
-};

@@ -14,15 +14,34 @@ npm install @synchive/synchive-js
 import { SyncHiveClient } from "@synchive/synchive-js";
 
 const synchive = new SyncHiveClient({
-  publishableKey: "sh_publishable_c2hrX2xpdmVf...ODo",
+  publishableKey: "sh_publishable_v2_us-west-2_cHJvZDo6...",
 });
 
-// Initialize the client
+// Initialize the client on every page load. This restores any saved session,
+// and completes sign-up when the user arrives from the confirmation email.
 try {
   await synchive.init();
 } catch (error) {
-  // Surface sign-in callback errors to the user
-  console.error("Auth failed:", error);
+  // Surface confirmation errors to the user
+  console.error("Email confirmation failed:", error);
+}
+
+// Sign up with email and password. SyncHive emails a confirmation link back
+// to your app, and init() signs the user in when they follow it.
+try {
+  await synchive.signUpWithPassword({ email, password });
+  // Tell the user to check their email
+} catch (error) {
+  // Surface sign-up errors to the user
+  console.error("Sign-up failed:", error);
+}
+
+// Sign in with email and password
+try {
+  await synchive.signInWithPassword({ email, password });
+} catch (error) {
+  // Surface sign-in errors to the user
+  console.error("Sign-in failed:", error);
 }
 
 // Listen for auth lifecycle events.
@@ -72,7 +91,7 @@ try {
 }
 ```
 
-Most apps only need `init()`, `onAuthStateChange()`, `signInRedirect()`, `list()`, `get()`, `create()`, and `update()`.
+Most apps only need `init()`, `onAuthStateChange()`, `signInWithPassword()`, `signUpWithPassword()`, `list()`, `get()`, `create()`, and `update()`.
 
 ## Helpers
 
@@ -80,7 +99,9 @@ Common
 
 - `init(): Promise<void>`
 - `onAuthStateChange(listener: AuthStateChangeListener): AuthStateChangeUnsubscribe` (returns a cleanup callback)
-- `signInRedirect(): Promise<void>`
+- `signInWithPassword(credentials: { email: string; password: string }): Promise<void>`
+- `signUpWithPassword(credentials: { email: string; password: string }): Promise<void>`
+- `signOut(): Promise<void>`
 - `list<T>(shape: string, params?: { top?: number; skip?: number; filter?: string; orderby?: string }): Promise<{ shapes: T[]; pagination: { totalItems?: number; totalPages?: number; pageNumber?: number; pageSize?: number } }>`
 - `get<T>(shape: string, hiveId: string): Promise<T>`
 - `create<T>(shape: string, payload: T): Promise<T>`
@@ -91,19 +112,24 @@ Common
 
 Advanced
 
-- `signOutRedirect(): Promise<void>`
-- `getUser(): Promise<User | null>`
+- `getUser(): Promise<SyncHiveUser | null>`
 - `createUploadUrl(payload: { fileName: string; contentType: string; fileSize: number; fileHiveId?: string }): Promise<{ fileHiveId: string; uploadUrl: string; uploadToken: string; expiresOn: string }>`
 - `createDownloadUrl(fileHiveId: string): Promise<{ fileHiveId: string; fileName: string; fileSize: number; contentType?: string; downloadUrl: string; expiresOn: string }>`
 
 ## Notes
 
-- Tokens are stored in `localStorage` using `oidc-client-ts`. Be aware any XSS in your app can expose these tokens.
-- `init()` is callback initialization only and throws if sign-in callback handling fails. Wrap it in `try/catch` to show a user-friendly message.
+- Tokens are stored in `localStorage`. Be aware any XSS in your app can expose these tokens.
+- `init()` restores the stored session, and completes sign-in when the user returns from the sign-up confirmation email. It throws if that confirmation fails, so wrap it in `try/catch` to show a user-friendly message.
+- `signInWithPassword()` throws a `SyncHiveAuthError` with `code` `email_not_verified` if the user hasn't confirmed their email yet.
+- `signUpWithPassword()` throws a `SyncHiveAuthError` with `code` `email_already_exists` if the email already has a confirmed account. Offer sign-in instead.
 - `onAuthStateChange()` calls your listener immediately with current state, then again whenever auth state changes.
 - Auth lifecycle event names are exported as SDK types via `AuthStateChangeTrigger`: `"authenticated"` and `"unauthenticated"`.
 - On initial mount, the first emitted event can be either `"authenticated"` or `"unauthenticated"` depending on whether a valid session already exists.
-- If this SDK is run within an iframe, authentication uses a popup because many identity providers block login pages inside frames (`X-Frame-Options` / `frame-ancestors`). If popups are blocked, the SDK attempts to continue by redirecting the top-level page; if that is also blocked by the host iframe/browser policy, authentication fails with an explicit error.
 - `uploadFile()` / `downloadFile()` are convenience wrappers: they call `createUploadUrl()` / `createDownloadUrl()` for you, then PUT/fetch the file bytes to/from that URL.
 - `createUploadUrl()` / `createDownloadUrl()` are for when you need more control over the file transfer than `uploadFile()` / `downloadFile()` give you — e.g. tracking upload progress via `XMLHttpRequest`'s `upload.onprogress`.
-- Third-party notices are listed in `THIRD_PARTY_NOTICES.md`.
+
+## Upgrading from 1.x
+
+- 2.x requires a V2 publishable key (`sh_publishable_v2_...`). V1 keys throw an error.
+- `signInRedirect()` and `signOutRedirect()` are replaced by `signInWithPassword()`, `signUpWithPassword()` and `signOut()`.
+- `SyncHiveUser` fields are renamed: `profile.sub` is now `id`, `profile.email` is `email`, `profile.name` is `name`, `profile` is `claims`, and `access_token` is `accessToken`. `expires_at` (seconds) is now `expiresAt` (milliseconds).
