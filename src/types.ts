@@ -1,5 +1,3 @@
-import type { User, UserManagerSettings } from "oidc-client-ts";
-
 export type ListParams = {
   top?: number;
   skip?: number;
@@ -52,14 +50,40 @@ export type DownloadedFile = {
   blob: Blob;
 };
 
+export type SyncHiveUser = {
+  /** The user's ID, from the access token's `sub` claim. */
+  id: string;
+  email?: string;
+  name?: string;
+  /** Every claim in the access token. */
+  claims: Record<string, unknown>;
+  accessToken: string;
+  /** Access token expiry, in milliseconds since the Unix epoch. */
+  expiresAt: number;
+  readonly expired: boolean;
+};
+
+/** Stable reasons the SyncHive auth service gives for failures. */
+export type SyncHiveAuthErrorCode =
+  | "email_already_exists"
+  | "email_not_verified"
+  | "invalid_redirect"
+  | "invalid_confirmation"
+  // Keeps codes the server adds later assignable without losing autocomplete.
+  | (string & {});
+
+/** Thrown by the auth methods. */
+export type SyncHiveAuthError = Error & {
+  status: number;
+  code?: SyncHiveAuthErrorCode;
+};
+
 export type AuthState = {
-  user: User | null;
+  user: SyncHiveUser | null;
   isAuthenticated: boolean;
 };
 
-export type AuthStateChangeTrigger =
-  | "authenticated"
-  | "unauthenticated";
+export type AuthStateChangeTrigger = "authenticated" | "unauthenticated";
 
 export type AuthStateChangeListener = (
   state: AuthState,
@@ -72,8 +96,6 @@ export type FetchLike = typeof fetch;
 
 export type SynchiveClientOptions = {
   publishableKey: string;
-  auth?: UserManagerSettings;
-  authOverrides?: Partial<UserManagerSettings>;
   storage?: Storage;
   fetch?: FetchLike;
 };
