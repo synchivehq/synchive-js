@@ -1,4 +1,10 @@
-import { PasswordAuth, type PasswordCredentials } from "./auth/password";
+import {
+  PasswordAuth,
+  type PasswordChange,
+  type PasswordCredentials,
+  type PasswordResetCompletion,
+  type PasswordResetRequest,
+} from "./auth/password";
 import { decodePublishableKey, getApiBaseUrl } from "./publishableKey";
 import type {
   AuthState,
@@ -135,6 +141,23 @@ export class SyncHiveClient {
 
   async signOut(): Promise<void> {
     await this.auth.signOut();
+  }
+
+  /** Changes the signed-in user's password. They stay signed in. */
+  async changePassword(change: PasswordChange): Promise<void> {
+    await this.auth.changePassword(change);
+  }
+
+  /** Emails the user a link to passwordResetPageUrl carrying a single-use reset token. */
+  async requestPasswordReset(request: PasswordResetRequest): Promise<void> {
+    await this.auth.requestPasswordReset(request);
+  }
+
+  /** Sets a new password using the reset token. The user must sign in afterwards. */
+  async completePasswordReset(
+    completion: PasswordResetCompletion,
+  ): Promise<void> {
+    await this.auth.completePasswordReset(completion);
   }
 
   async getUser(): Promise<SyncHiveUser | null> {

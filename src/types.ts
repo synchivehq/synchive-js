@@ -69,6 +69,16 @@ export type SyncHiveAuthErrorCode =
   | "email_not_verified"
   | "invalid_redirect"
   | "invalid_confirmation"
+  | "incorrect_password"
+  | "invalid_password"
+  | "invalid_email"
+  | "account_not_found"
+  | "account_email_not_verified"
+  | "email_request_rate_limited"
+  | "invalid_password_reset_link"
+  | "superseded_password_reset_link"
+  | "used_password_reset_link"
+  | "expired_password_reset_link"
   // Keeps codes the server adds later assignable without losing autocomplete.
   | (string & {});
 

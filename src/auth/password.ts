@@ -11,6 +11,23 @@ export type PasswordCredentials = {
   password: string;
 };
 
+export type PasswordChange = {
+  currentPassword: string;
+  newPassword: string;
+};
+
+export type PasswordResetRequest = {
+  email: string;
+  /** The app's reset form page. Must exactly match one of the app's allowed URLs. */
+  passwordResetPageUrl: string;
+};
+
+export type PasswordResetCompletion = {
+  /** The sh_password_reset_token query parameter from the reset email link. */
+  token: string;
+  newPassword: string;
+};
+
 type Tokens = {
   accessToken: string;
   refreshToken: string;
@@ -33,7 +50,12 @@ type Session = {
 
 const AUTH_CODE_PARAM = "sh_auth_code";
 const REFRESH_MARGIN_SECONDS = 30;
-const PUBLISHABLE_KEY_PATHS = new Set(["/sign-up/password", "/exchange"]);
+const PUBLISHABLE_KEY_PATHS = new Set([
+  "/sign-up/password",
+  "/exchange",
+  "/password/change",
+  "/password/reset/request",
+]);
 
 /** Email and password sign-in, with sessions kept in storage and refreshed before expiry. */
 export class PasswordAuth {
@@ -105,17 +127,40 @@ export class PasswordAuth {
     }
   }
 
+  async changePassword(change: PasswordChange): Promise<void> {
+    const session = await this.getAuthenticatedSession();
+    const response = await this.authRequest(
+      "/password/change",
+      change,
+      session.accessToken,
+    );
+    await this.readAuthResponse<void>(response);
+  }
+
+  async requestPasswordReset({
+    email,
+    passwordResetPageUrl,
+  }: PasswordResetRequest): Promise<void> {
+    const response = await this.authRequest("/password/reset/request", {
+      email,
+      options: { passwordResetPageUrl },
+    });
+    await this.readAuthResponse<void>(response);
+  }
+
+  async completePasswordReset(
+    completion: PasswordResetCompletion,
+  ): Promise<void> {
+    const response = await this.authRequest("/password/reset", completion);
+    await this.readAuthResponse<void>(response);
+  }
+
   async getUser(): Promise<SyncHiveUser | null> {
     return toUser(this.readSession());
   }
 
   async authorize(headers: Headers): Promise<void> {
-    const session = await this.getFreshSession();
-    if (!session || secondsUntilExpiry(session) <= 0) {
-      throw new Error(
-        "User is not authenticated. Call signInWithPassword() first.",
-      );
-    }
+    const session = await this.getAuthenticatedSession();
     headers.set("Authorization", `Bearer ${session.accessToken}`);
     headers.set("x-PublishableKey", this.publishableKey);
   }
@@ -174,6 +219,16 @@ export class PasswordAuth {
       },
       Math.max(0, delaySeconds * 1000),
     );
+  }
+
+  private async getAuthenticatedSession(): Promise<Session> {
+    const session = await this.getFreshSession();
+    if (!session || secondsUntilExpiry(session) <= 0) {
+      throw new Error(
+        "User is not authenticated. Call signInWithPassword() first.",
+      );
+    }
+    return session;
   }
 
   private async getFreshSession(): Promise<Session | null> {
