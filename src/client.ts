@@ -4,6 +4,9 @@ import {
   type PasswordCredentials,
   type PasswordResetCompletion,
   type PasswordResetRequest,
+  type PasswordSignUp,
+  type RegistrationCompletion,
+  type VerificationResend,
 } from "./auth/password";
 import { decodePublishableKey, getApiBaseUrl } from "./publishableKey";
 import type {
@@ -134,9 +137,21 @@ export class SyncHiveClient {
     await this.auth.signInWithPassword(credentials);
   }
 
-  /** Registers the user; they are signed in after following the confirmation email back to the app. */
-  async signUpWithPassword(credentials: PasswordCredentials): Promise<void> {
-    await this.auth.signUpWithPassword(credentials);
+  /** Registers the user and emails them a link to verificationPageUrl. They aren't signed in until completeRegistration(). */
+  async signUpWithPassword(signUp: PasswordSignUp): Promise<void> {
+    await this.auth.signUpWithPassword(signUp);
+  }
+
+  /** Emails a new verification link. The previous link stops working. */
+  async resendVerification(resend: VerificationResend): Promise<void> {
+    await this.auth.resendVerification(resend);
+  }
+
+  /** Confirms the user's email with the token from the verification link, and signs them in. */
+  async completeRegistration(
+    completion: RegistrationCompletion,
+  ): Promise<void> {
+    await this.auth.completeRegistration(completion);
   }
 
   async signOut(): Promise<void> {

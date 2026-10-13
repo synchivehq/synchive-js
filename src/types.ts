@@ -65,10 +65,11 @@ export type SyncHiveUser = {
 
 /** Stable reasons the SyncHive auth service gives for failures. */
 export type SyncHiveAuthErrorCode =
-  | "email_already_exists"
-  | "email_not_verified"
+  | "email_already_in_use"
   | "invalid_redirect"
   | "invalid_confirmation"
+  | "superseded_verification_link"
+  | "registration_password_required"
   | "incorrect_password"
   | "invalid_password"
   | "invalid_email"

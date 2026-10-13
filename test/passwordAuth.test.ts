@@ -31,7 +31,7 @@ describe("V2 password auth", () => {
 
     const [signIn] = authCalls(calls, "/sign-in/password");
     expect(signIn?.body).toEqual({ email: "ada@example.com", password: "pw" });
-    // The OpenAPI spec only declares the publishable key on sign-up, resend and exchange.
+    // The OpenAPI spec doesn't declare the publishable key on sign-in.
     expect(signIn?.headers.has("x-PublishableKey")).toBe(false);
 
     expect(events.map((event) => event.isAuthenticated)).toEqual([false, true]);
@@ -54,8 +54,8 @@ describe("V2 password auth", () => {
             type: "about:blank",
             title: "Forbidden",
             status: 403,
-            detail: "Email address has not been verified.",
-            code: "email_not_verified",
+            detail: "The account email must be verified before signing in.",
+            code: "account_email_not_verified",
           },
           { status: 403 },
         ),
@@ -66,19 +66,24 @@ describe("V2 password auth", () => {
       .catch((caught: unknown) => caught)) as SyncHiveAuthError;
 
     expect(error).toBeInstanceOf(Error);
-    expect(error.message).toBe("Email address has not been verified.");
+    expect(error.message).toBe(
+      "The account email must be verified before signing in.",
+    );
     expect(error.status).toBe(403);
-    expect(error.code).toBe("email_not_verified");
+    expect(error.code).toBe("account_email_not_verified");
   });
 
   it("falls back to a generic message when the error has no body", async () => {
     const { client } = createClient({
       "/sign-up/password": () => new Response(null, { status: 503 }),
     });
-    stubWindow();
 
     await expect(
-      client.signUpWithPassword({ email: "a@b.c", password: "pw" }),
+      client.signUpWithPassword({
+        email: "a@b.c",
+        password: "pw",
+        verificationPageUrl: "https://app.test/verify",
+      }),
     ).rejects.toMatchObject({
       message: "Authentication failed (503).",
       status: 503,
@@ -222,42 +227,6 @@ describe("V2 password auth", () => {
     );
     expect(await client.getUser()).toBeNull();
     expect(events.at(-1)?.isAuthenticated).toBe(false);
-  });
-
-  it("sends the app URL as the sign-up confirmation redirect", async () => {
-    stubWindow("https://app.test/signup?ref=x");
-    const { client, calls } = createClient({
-      "/sign-up/password": () => Response.json({ session: null }),
-    });
-
-    await client.signUpWithPassword({ email: "a@b.c", password: "pw" });
-
-    const [signUp] = authCalls(calls, "/sign-up/password");
-    expect(signUp?.body).toEqual({
-      email: "a@b.c",
-      password: "pw",
-      options: { emailRedirectTo: "https://app.test/" },
-    });
-    expect(signUp?.headers.get("x-PublishableKey")).toBe(v2Key());
-    expect(await client.getUser()).toBeNull();
-  });
-
-  it("exchanges the confirmation code on init and removes it from the URL", async () => {
-    vi.useFakeTimers();
-    const window = stubWindow(
-      "https://app.test/welcome?sh_auth_code=abc&tab=1",
-    );
-    const { client, calls, events } = createClient({
-      "/exchange": () => Response.json(tokens({ sub: "user-1" })),
-    });
-
-    await client.init();
-
-    const [exchange] = authCalls(calls, "/exchange");
-    expect(exchange?.body).toEqual({ code: "abc" });
-    expect(exchange?.headers.get("x-PublishableKey")).toBe(v2Key());
-    expect(window.location.href).toBe("https://app.test/welcome?tab=1");
-    expect(events.at(-1)?.user?.id).toBe("user-1");
   });
 
   it("refreshes in the background shortly before expiry", async () => {
