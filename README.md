@@ -152,8 +152,6 @@ try {
 }
 ```
 
-Most apps only need `init()`, `onAuthStateChange()`, `signInWithPassword()`, `signUpWithPassword()`, `completeRegistration()`, `list()`, `get()`, `create()`, and `update()`.
-
 ## Helpers
 
 Common
