@@ -25,6 +25,7 @@ try {
   await synchive.signUpWithPassword({
     email,
     password,
+    // Must be one of your app's allowed App URLs in SyncHive
     verificationPageUrl: `${location.origin}/verify-email`,
   });
   // Tell the user to check their email
@@ -54,6 +55,7 @@ if (verificationToken) {
 try {
   await synchive.resendVerification({
     email,
+    // Must be one of your app's allowed App URLs in SyncHive
     verificationPageUrl: `${location.origin}/verify-email`,
   });
 } catch (error) {
@@ -72,6 +74,7 @@ try {
 try {
   await synchive.requestPasswordReset({
     email,
+    // Must be one of your app's allowed App URLs in SyncHive
     passwordResetPageUrl: `${location.origin}/reset-password`,
   });
   // Tell the user to check their email
@@ -183,6 +186,7 @@ Advanced
 
 - Tokens are stored in `localStorage`. Be aware any XSS in your app can expose these tokens.
 - `init()` restores the stored session.
+- `signUpWithPassword()`, `resendVerification()` and `requestPasswordReset()` throw a `SyncHiveAuthError` with `code` `invalid_redirect` if `verificationPageUrl` or `passwordResetPageUrl` isn't one of your app's allowed App URLs in SyncHive.
 - `signInWithPassword()` throws a `SyncHiveAuthError` with `code` `account_email_not_verified` if the user hasn't confirmed their email yet.
 - `signUpWithPassword()` emails a link to `verificationPageUrl` with `sh_verification_token` added to the query. It doesn't sign the user in. It throws a `SyncHiveAuthError` with `code` `email_already_in_use` if the email already has an account, including one awaiting verification, or `invalid_password` if the password doesn't meet the password policy.
 - `completeRegistration()` takes the `sh_verification_token` query parameter from the verification email link, and signs the user in. When the user confirms in the same browser they signed up in, the SDK proves the sign-up for them. Otherwise it throws `registration_password_required`: ask for the password they signed up with and call it again with `password`. A wrong password throws `incorrect_password`, a link replaced by a newer one throws `superseded_verification_link`, and a used, expired or unknown link throws `invalid_confirmation`.
