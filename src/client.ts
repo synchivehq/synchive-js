@@ -1,4 +1,13 @@
-import { PasswordAuth, type PasswordCredentials } from "./auth/password";
+import {
+  PasswordAuth,
+  type PasswordChange,
+  type PasswordCredentials,
+  type PasswordResetCompletion,
+  type PasswordResetRequest,
+  type PasswordSignUp,
+  type RegistrationCompletion,
+  type VerificationResend,
+} from "./auth/password";
 import { decodePublishableKey, getApiBaseUrl } from "./publishableKey";
 import type {
   AuthState,
@@ -128,13 +137,42 @@ export class SyncHiveClient {
     await this.auth.signInWithPassword(credentials);
   }
 
-  /** Registers the user; they are signed in after following the confirmation email back to the app. */
-  async signUpWithPassword(credentials: PasswordCredentials): Promise<void> {
-    await this.auth.signUpWithPassword(credentials);
+  /** Registers the user and emails them a link to verificationPageUrl. They aren't signed in until completeRegistration(). */
+  async signUpWithPassword(signUp: PasswordSignUp): Promise<void> {
+    await this.auth.signUpWithPassword(signUp);
+  }
+
+  /** Emails a new verification link. The previous link stops working. */
+  async resendVerification(resend: VerificationResend): Promise<void> {
+    await this.auth.resendVerification(resend);
+  }
+
+  /** Confirms the user's email with the token from the verification link, and signs them in. */
+  async completeRegistration(
+    completion: RegistrationCompletion,
+  ): Promise<void> {
+    await this.auth.completeRegistration(completion);
   }
 
   async signOut(): Promise<void> {
     await this.auth.signOut();
+  }
+
+  /** Changes the signed-in user's password. They stay signed in. */
+  async changePassword(change: PasswordChange): Promise<void> {
+    await this.auth.changePassword(change);
+  }
+
+  /** Emails the user a link to passwordResetPageUrl carrying a single-use reset token. */
+  async requestPasswordReset(request: PasswordResetRequest): Promise<void> {
+    await this.auth.requestPasswordReset(request);
+  }
+
+  /** Sets a new password using the reset token. The user must sign in afterwards. */
+  async completePasswordReset(
+    completion: PasswordResetCompletion,
+  ): Promise<void> {
+    await this.auth.completePasswordReset(completion);
   }
 
   async getUser(): Promise<SyncHiveUser | null> {

@@ -4,17 +4,63 @@ import {
   type ParsedPublishableKey,
 } from "../publishableKey";
 import type { FetchLike, SyncHiveAuthError, SyncHiveUser } from "../types";
-import { getDefaultRedirectUrl } from "../urls";
 
 export type PasswordCredentials = {
   email: string;
   password: string;
 };
 
+export type PasswordSignUp = PasswordCredentials & {
+  /** The app's email confirmation page. Must exactly match one of the app's allowed URLs. */
+  verificationPageUrl: string;
+};
+
+export type VerificationResend = {
+  email: string;
+  /** The app's email confirmation page. Must exactly match one of the app's allowed URLs. */
+  verificationPageUrl: string;
+};
+
+export type RegistrationCompletion = {
+  /** The sh_verification_token query parameter from the verification email link. */
+  token: string;
+  /** The password the user signed up with. Only needed when the server returns registration_password_required. */
+  password?: string;
+};
+
+export type PasswordChange = {
+  currentPassword: string;
+  newPassword: string;
+};
+
+export type PasswordResetRequest = {
+  email: string;
+  /** The app's reset form page. Must exactly match one of the app's allowed URLs. */
+  passwordResetPageUrl: string;
+};
+
+export type PasswordResetCompletion = {
+  /** The sh_password_reset_token query parameter from the reset email link. */
+  token: string;
+  newPassword: string;
+};
+
 type Tokens = {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
+};
+
+type PendingRegistration = {
+  registrationSessionToken: string;
+  registrationSessionExpiresIn: number;
+};
+
+/** Proof that this browser started the sign-up, so confirming doesn't need the password. */
+type Registration = {
+  token: string;
+  /** Milliseconds since the Unix epoch. */
+  expiresAt: number;
 };
 
 type AuthProblem = {
@@ -31,9 +77,13 @@ type Session = {
   claims: Record<string, unknown>;
 };
 
-const AUTH_CODE_PARAM = "sh_auth_code";
 const REFRESH_MARGIN_SECONDS = 30;
-const PUBLISHABLE_KEY_PATHS = new Set(["/sign-up/password", "/exchange"]);
+const PUBLISHABLE_KEY_PATHS = new Set([
+  "/sign-up/password",
+  "/verification/resend",
+  "/password/change",
+  "/password/reset/request",
+]);
 
 /** Email and password sign-in, with sessions kept in storage and refreshed before expiry. */
 export class PasswordAuth {
@@ -41,6 +91,7 @@ export class PasswordAuth {
   private readonly authBaseUrl: string;
   private readonly storage: Storage;
   private readonly storageKey: string;
+  private readonly registrationStorageKey: string;
   private readonly fetchFn: FetchLike;
   private readonly listeners = new Set<(user: SyncHiveUser | null) => void>();
   private refreshPromise?: Promise<Session | null>;
@@ -56,22 +107,14 @@ export class PasswordAuth {
     this.authBaseUrl = `${getApisHost(input.parsed)}/v1/hives/${encodeURIComponent(input.parsed.tenantHiveId)}/auth`;
     this.storage = input.storage;
     this.storageKey = `synchive.session:${input.publishableKey}`;
+    this.registrationStorageKey = `synchive.registration:${input.publishableKey}`;
     this.fetchFn = input.fetchFn;
   }
 
   async init(): Promise<void> {
-    const code = this.takeAuthCodeFromUrl();
-    if (code === null) {
-      // A failed refresh keeps the stored session; the next request retries it.
-      await this.getFreshSession().catch(() => undefined);
-      this.scheduleRefresh(this.readSession());
-      return;
-    }
-
-    const response = await this.authRequest("/exchange", { code });
-    this.setSession(
-      sessionFromTokens(await this.readAuthResponse<Tokens>(response)),
-    );
+    // A failed refresh keeps the stored session; the next request retries it.
+    await this.getFreshSession().catch(() => undefined);
+    this.scheduleRefresh(this.readSession());
   }
 
   async signInWithPassword(credentials: PasswordCredentials): Promise<void> {
@@ -81,12 +124,50 @@ export class PasswordAuth {
     );
   }
 
-  async signUpWithPassword(credentials: PasswordCredentials): Promise<void> {
+  async signUpWithPassword({
+    email,
+    password,
+    verificationPageUrl,
+  }: PasswordSignUp): Promise<void> {
     const response = await this.authRequest("/sign-up/password", {
-      ...credentials,
-      options: { emailRedirectTo: getDefaultRedirectUrl() },
+      email,
+      password,
+      options: { emailRedirectTo: verificationPageUrl },
+    });
+    const pending = await this.readAuthResponse<PendingRegistration>(response);
+    const registration: Registration = {
+      token: pending.registrationSessionToken,
+      expiresAt: Date.now() + pending.registrationSessionExpiresIn * 1000,
+    };
+    this.storage.setItem(
+      this.registrationStorageKey,
+      JSON.stringify(registration),
+    );
+  }
+
+  async resendVerification({
+    email,
+    verificationPageUrl,
+  }: VerificationResend): Promise<void> {
+    const response = await this.authRequest("/verification/resend", {
+      email,
+      options: { emailRedirectTo: verificationPageUrl },
     });
     await this.readAuthResponse<void>(response);
+  }
+
+  async completeRegistration({
+    token,
+    password,
+  }: RegistrationCompletion): Promise<void> {
+    const response = await this.authRequest("/confirm", {
+      token,
+      registrationSessionToken: this.readRegistration()?.token,
+      password,
+    });
+    const tokens = await this.readAuthResponse<Tokens>(response);
+    this.storage.removeItem(this.registrationStorageKey);
+    this.setSession(sessionFromTokens(tokens));
   }
 
   async signOut(): Promise<void> {
@@ -105,17 +186,40 @@ export class PasswordAuth {
     }
   }
 
+  async changePassword(change: PasswordChange): Promise<void> {
+    const session = await this.getAuthenticatedSession();
+    const response = await this.authRequest(
+      "/password/change",
+      change,
+      session.accessToken,
+    );
+    await this.readAuthResponse<void>(response);
+  }
+
+  async requestPasswordReset({
+    email,
+    passwordResetPageUrl,
+  }: PasswordResetRequest): Promise<void> {
+    const response = await this.authRequest("/password/reset/request", {
+      email,
+      options: { passwordResetPageUrl },
+    });
+    await this.readAuthResponse<void>(response);
+  }
+
+  async completePasswordReset(
+    completion: PasswordResetCompletion,
+  ): Promise<void> {
+    const response = await this.authRequest("/password/reset", completion);
+    await this.readAuthResponse<void>(response);
+  }
+
   async getUser(): Promise<SyncHiveUser | null> {
     return toUser(this.readSession());
   }
 
   async authorize(headers: Headers): Promise<void> {
-    const session = await this.getFreshSession();
-    if (!session || secondsUntilExpiry(session) <= 0) {
-      throw new Error(
-        "User is not authenticated. Call signInWithPassword() first.",
-      );
-    }
+    const session = await this.getAuthenticatedSession();
     headers.set("Authorization", `Bearer ${session.accessToken}`);
     headers.set("x-PublishableKey", this.publishableKey);
   }
@@ -128,15 +232,18 @@ export class PasswordAuth {
     };
   }
 
-  /** Removes the one-use sign-up confirmation code from the URL so it cannot leak or be replayed. */
-  private takeAuthCodeFromUrl(): string | null {
-    if (typeof window === "undefined") return null;
-    const url = new URL(window.location.href);
-    const code = url.searchParams.get(AUTH_CODE_PARAM);
-    if (code === null) return null;
-    url.searchParams.delete(AUTH_CODE_PARAM);
-    window.history.replaceState(window.history.state, "", url.toString());
-    return code;
+  /** An unexpired registration started in this browser, if any. */
+  private readRegistration(): Registration | null {
+    const stored = this.storage.getItem(this.registrationStorageKey);
+    if (stored === null) return null;
+    try {
+      const registration = JSON.parse(stored) as Registration;
+      if (registration.expiresAt > Date.now()) return registration;
+    } catch {
+      // An unreadable registration falls back to confirming with the password.
+    }
+    this.storage.removeItem(this.registrationStorageKey);
+    return null;
   }
 
   private readSession(): Session | null {
@@ -174,6 +281,16 @@ export class PasswordAuth {
       },
       Math.max(0, delaySeconds * 1000),
     );
+  }
+
+  private async getAuthenticatedSession(): Promise<Session> {
+    const session = await this.getFreshSession();
+    if (!session || secondsUntilExpiry(session) <= 0) {
+      throw new Error(
+        "User is not authenticated. Call signInWithPassword() first.",
+      );
+    }
+    return session;
   }
 
   private async getFreshSession(): Promise<Session | null> {

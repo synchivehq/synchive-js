@@ -42,14 +42,3 @@ export const applyTenantAppBasePathToApiBaseUrl = (baseUrl: string): string => {
     return normalizedBaseUrl;
   }
 };
-
-export const getDefaultRedirectUrl = (): string => {
-  if (typeof window === "undefined") {
-    throw new Error("Browser redirects require a window environment.");
-  }
-
-  return new URL(
-    getTenantAppBasePath() || "/",
-    window.location.origin,
-  ).toString();
-};
