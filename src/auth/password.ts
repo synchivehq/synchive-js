@@ -79,6 +79,8 @@ type Session = {
 
 const REFRESH_MARGIN_SECONDS = 30;
 const PUBLISHABLE_KEY_PATHS = new Set([
+  "/sign-in/password",
+  "/refresh",
   "/sign-up/password",
   "/verification/resend",
   "/password/change",
