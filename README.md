@@ -184,6 +184,7 @@ Advanced
 
 - Tokens are stored in `localStorage`. Be aware any XSS in your app can expose these tokens.
 - `init()` restores the stored session.
+- Password sign-in and token refresh automatically include your configured publishable key to identify the app.
 - `signUpWithPassword()`, `resendVerification()` and `requestPasswordReset()` throw a `SyncHiveAuthError` with `code` `invalid_redirect` if `verificationPageUrl` or `passwordResetPageUrl` isn't one of your app's allowed App URLs in SyncHive.
 - `signInWithPassword()` throws a `SyncHiveAuthError` with `code` `account_email_not_verified` if the user hasn't confirmed their email yet.
 - `signUpWithPassword()` emails a link to `verificationPageUrl` with `sh_verification_token` added to the query. It doesn't sign the user in. It throws a `SyncHiveAuthError` with `code` `email_already_in_use` if the email already has an account, including one awaiting verification, or `invalid_password` if the password doesn't meet the password policy.

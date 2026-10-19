@@ -31,8 +31,7 @@ describe("V2 password auth", () => {
 
     const [signIn] = authCalls(calls, "/sign-in/password");
     expect(signIn?.body).toEqual({ email: "ada@example.com", password: "pw" });
-    // The OpenAPI spec doesn't declare the publishable key on sign-in.
-    expect(signIn?.headers.has("x-PublishableKey")).toBe(false);
+    expect(signIn?.headers.get("x-PublishableKey")).toBe(v2Key());
 
     expect(events.map((event) => event.isAuthenticated)).toEqual([false, true]);
     expect(events[1]?.user?.email).toBe("ada@example.com");
