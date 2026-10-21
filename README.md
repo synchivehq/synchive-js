@@ -185,8 +185,6 @@ Common
 - `deleteFile(fileHiveId: string): Promise<void>`
 - `getCurrentUser(): Promise<SyncHiveUser | null>`
 
-`getCurrentUser()` returns the signed-in user's access-token claims, or `null` when signed out. `getUser()` remains as a deprecated alias. `getAppUser(accountHiveId)` fetches a user management record from the server, including their enabled status and visible role assignments.
-
 User management
 
 - `getPermissions(): Promise<SyncHivePermissions>`

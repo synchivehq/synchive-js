@@ -321,11 +321,10 @@ describe("getCurrentUser", () => {
     expect(calls).toEqual([]);
   });
 
-  it("returns the signed-in session and supports the deprecated alias without fetching", async () => {
+  it("returns the signed-in session without fetching", async () => {
     const { client, calls } = await signedInClient();
     const current = await client.getCurrentUser();
     expect(current?.id).toBe("user-1");
-    await expect(client.getUser()).resolves.toEqual(current);
     expect(calls).toHaveLength(1);
   });
 });

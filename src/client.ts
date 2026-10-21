@@ -213,11 +213,6 @@ export class SyncHiveClient {
     return this.auth.getCurrentUser();
   }
 
-  /** @deprecated Use getCurrentUser(). */
-  async getUser(): Promise<SyncHiveUser | null> {
-    return this.getCurrentUser();
-  }
-
   /** Current permission and Role/Policy names in this app's Scope. Always fetches from the server. */
   async getPermissions(): Promise<SyncHivePermissions> {
     return this.request<SyncHivePermissions>(
