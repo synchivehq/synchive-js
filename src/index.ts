@@ -15,3 +15,20 @@ export type {
   UploadFileRequest,
   UploadFileResult,
 } from "./types";
+
+export type {
+  AppUserManagementPermission,
+  SyncHivePermissionPolicy,
+  SyncHivePermissionRole,
+  SyncHivePermissions,
+  AppUserRole,
+  AppUser,
+  AppUserListParams,
+  AppUserCollection,
+  AppUserUpdate,
+  SyncHiveRoleAssignment,
+  AppManagementRole,
+  AppRoleListParams,
+  AppRoleCollection,
+  SyncHiveManagementError,
+} from "./types";

@@ -119,6 +119,16 @@ synchive.onAuthStateChange(({ user }, event) => {
   }
 });
 
+// User permissions and management
+try {
+  const permissions = await synchive.getPermissions();
+  const users = await synchive.listAppUsers({ top: 20 });
+  // Assigning Roles requires EDIT permission.
+  await synchive.assignAppUserRole(accountHiveId, roleId);
+} catch (error) {
+  console.error("User management failed:", error);
+}
+
 // Data helpers
 try {
   const products = await synchive.list("Product", {
@@ -175,6 +185,18 @@ Common
 - `deleteFile(fileHiveId: string): Promise<void>`
 - `getUser(): Promise<SyncHiveUser | null>`
 
+User management
+
+- `getPermissions(): Promise<SyncHivePermissions>`
+- `listAppUsers(params?: AppUserListParams): Promise<AppUserCollection>`
+- `getAppUser(accountHiveId: string): Promise<AppUser>`
+- `updateAppUser(accountHiveId: string, update: { isEnabled: boolean }): Promise<AppUser>`
+- `deleteAppUser(accountHiveId: string): Promise<void>`
+- `assignAppUserRole(accountHiveId: string, roleId: number): Promise<SyncHiveRoleAssignment>`
+- `removeAppUserRole(accountHiveId: string, roleId: number): Promise<void>`
+- `listAppRoles(params?: AppRoleListParams): Promise<AppRoleCollection>`
+- `listRoleMembers(roleId: number, params?: AppUserListParams): Promise<AppUserCollection>`
+
 Advanced
 
 - `createUploadUrl(payload: { fileName: string; contentType: string; fileSize: number; fileHiveId?: string }): Promise<{ fileHiveId: string; uploadUrl: string; uploadToken: string; expiresOn: string }>`
@@ -196,6 +218,9 @@ Advanced
 - `onAuthStateChange()` calls your listener immediately with current state, then again whenever auth state changes.
 - Auth lifecycle event names are exported as SDK types via `AuthStateChangeTrigger`: `"authenticated"` and `"unauthenticated"`.
 - On initial mount, the first emitted event can be either `"authenticated"` or `"unauthenticated"` depending on whether a valid session already exists.
+- `getPermissions()` returns the signed-in user's `appUserManagementPermission` (`NONE`, `VIEW`, or `EDIT`), plus Roles and Policies as `{ id, name }` objects.
+- `getPermissions()` and user management methods return a 403 error when SyncHive Roles are disabled. `VIEW` allows viewing users and assignments; `EDIT` allows changes. Protected Roles can only be assigned by their members.
+- User management failures throw a `SyncHiveManagementError` with `status`, `title`, and `detail`.
 - `uploadFile()` / `downloadFile()` are convenience wrappers: they call `createUploadUrl()` / `createDownloadUrl()` for you, then PUT/fetch the file bytes to/from that URL.
 - `createUploadUrl()` / `createDownloadUrl()` are for when you need more control over the file transfer than `uploadFile()` / `downloadFile()` give you — e.g. tracking upload progress via `XMLHttpRequest`'s `upload.onprogress`.
 

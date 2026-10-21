@@ -110,3 +110,67 @@ export type SynchiveClientOptions = {
   storage?: Storage;
   fetch?: FetchLike;
 };
+
+/** Resolved from current assignments in the App Registration default Role's Scope. */
+export type AppUserManagementPermission = "NONE" | "VIEW" | "EDIT";
+
+export type SyncHivePermissionPolicy = {
+  id: number;
+  name: string;
+};
+export type SyncHivePermissionRole = {
+  id: number;
+  name: string;
+};
+export type SyncHivePermissions = {
+  appUserManagementPermission: AppUserManagementPermission;
+  roles: SyncHivePermissionRole[];
+  policies: SyncHivePermissionPolicy[];
+};
+
+export type AppUserRole = {
+  id: number;
+  name: string;
+  scopeId: number;
+  scopeName: string;
+};
+export type AppUser = {
+  /** Encoded account Hive ID, not a raw numeric ID or the owning Hive identifier. */
+  hiveId: string;
+  isEnabled: boolean;
+  /** Assignments visible in this App Registration's Scope. */
+  roles: AppUserRole[];
+};
+export type AppUserListParams = { top?: number; skip?: number; filter?: string };
+export type AppUserCollection = {
+  value: AppUser[];
+  count: number;
+  nextLink?: string;
+};
+export type AppUserUpdate = { isEnabled: boolean };
+export type SyncHiveRoleAssignment = { id: number; name: string };
+
+export type AppManagementRole = {
+  id: number;
+  name: string;
+  description: string;
+  scopeId: number;
+  isDefault: boolean;
+  appUserManagementPermission: AppUserManagementPermission;
+  isProtected: boolean;
+};
+export type AppRoleListParams = { pageNumber?: number; pageSize?: number };
+export type AppRoleCollection = {
+  items: AppManagementRole[];
+  pageNumber: number;
+  pageSize: number;
+  totalSize: number;
+};
+
+/** HTTP problem returned by the App User management APIs. */
+export type SyncHiveManagementError = Error & {
+  status: number;
+  title?: string;
+  detail?: string;
+  code?: string;
+};
