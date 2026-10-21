@@ -8,7 +8,8 @@ import {
   type RegistrationCompletion,
   type VerificationResend,
 } from "./auth/password";
-import { decodePublishableKey, getApiBaseUrl, getApisHost } from "./publishableKey";
+import { decodePublishableKey, getApiBaseUrl, getAuthBaseUrl } from "./publishableKey";
+import { SyncHiveManagementError } from "./types";
 import type {
   AppUser,
   AppUserCollection,
@@ -18,7 +19,6 @@ import type {
   AppRoleListParams,
   SyncHivePermissions,
   SyncHiveRoleAssignment,
-  SyncHiveManagementError,
   AuthState,
   AuthStateChangeListener,
   AuthStateChangeTrigger,
@@ -105,9 +105,32 @@ const getDefaultFetch = (): FetchLike => {
   throw new Error("Fetch API is not available in this environment.");
 };
 
+const managementError = (response: Response, body: string): Error => {
+  let problem: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      problem = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Preserve the response body when the server does not return JSON.
+  }
+  const title = typeof problem.title === "string" ? problem.title : undefined;
+  const detail = typeof problem.detail === "string" ? problem.detail : undefined;
+  const code = typeof problem.code === "string" ? problem.code : undefined;
+  return new SyncHiveManagementError(
+    detail ||
+      title ||
+      body ||
+      `App User management request failed (${response.status}).`,
+    { status: response.status, title, detail, code },
+  );
+};
+
 export class SyncHiveClient {
   private readonly apiBaseUrl: string;
   private readonly authBaseUrl: string;
+  private readonly managementBaseUrl: string;
   private readonly fetchFn: FetchLike;
   private readonly auth: PasswordAuth;
 
@@ -118,9 +141,7 @@ export class SyncHiveClient {
     }
 
     const parsedPublishableKey = decodePublishableKey(publishableKey);
-    const apiBaseUrl = applyTenantAppBasePathToApiBaseUrl(
-      getApiBaseUrl(parsedPublishableKey),
-    );
+    const apiBaseUrl = getApiBaseUrl(parsedPublishableKey);
 
     const storage = options.storage ?? getDefaultStorage();
     if (!storage) {
@@ -129,8 +150,9 @@ export class SyncHiveClient {
       );
     }
 
-    this.apiBaseUrl = apiBaseUrl;
-    this.authBaseUrl = `${getApisHost(parsedPublishableKey)}/v1/hives/${encodeURIComponent(parsedPublishableKey.tenantHiveId)}/auth`;
+    this.apiBaseUrl = applyTenantAppBasePathToApiBaseUrl(apiBaseUrl);
+    this.managementBaseUrl = apiBaseUrl;
+    this.authBaseUrl = getAuthBaseUrl(parsedPublishableKey);
     this.fetchFn = options.fetch ?? getDefaultFetch();
     this.auth = new PasswordAuth({
       publishableKey,
@@ -186,8 +208,14 @@ export class SyncHiveClient {
     await this.auth.completePasswordReset(completion);
   }
 
+  /** Returns the signed-in user's access-token claims without fetching an App User record. */
+  async getCurrentUser(): Promise<SyncHiveUser | null> {
+    return this.auth.getCurrentUser();
+  }
+
+  /** @deprecated Use getCurrentUser(). */
   async getUser(): Promise<SyncHiveUser | null> {
-    return this.auth.getUser();
+    return this.getCurrentUser();
   }
 
   /** Current permission and Role/Policy names in this app's Scope. Always fetches from the server. */
@@ -195,7 +223,7 @@ export class SyncHiveClient {
     return this.request<SyncHivePermissions>(
       `${this.authBaseUrl}/me`,
       { cache: "no-store" },
-      true,
+      managementError,
     );
   }
 
@@ -269,11 +297,15 @@ export class SyncHiveClient {
     init: RequestInit = {},
     params?: AppUserListParams | AppRoleListParams,
   ): Promise<T> {
-    const url = new URL(`${this.apiBaseUrl}${path}`);
+    const url = new URL(`${this.managementBaseUrl}${path}`);
     for (const [key, value] of Object.entries(params ?? {})) {
       if (value !== undefined) url.searchParams.set(key, String(value));
     }
-    return this.request<T>(url.toString(), { cache: "no-store", ...init }, true);
+    return this.request<T>(
+      url.toString(),
+      { cache: "no-store", ...init },
+      managementError,
+    );
   }
 
   onAuthStateChange(
@@ -378,7 +410,8 @@ export class SyncHiveClient {
   private async request<T>(
     url: string,
     init: RequestInit = {},
-    managementErrors = false,
+    mapError: (response: Response, body: string) => Error = (response, body) =>
+      new Error(`Request failed (${response.status}): ${body}`),
   ): Promise<T> {
     const headers = new Headers(init.headers ?? {});
     await this.auth.authorize(headers);
@@ -394,25 +427,7 @@ export class SyncHiveClient {
     });
 
     if (!response.ok) {
-      const text = await response.text();
-      if (managementErrors) {
-        let problem: Record<string, unknown> = {};
-        try {
-          problem = JSON.parse(text) ?? {};
-        } catch {
-          // Preserve the HTTP status when the response is not JSON.
-        }
-        const detail = typeof problem.detail === "string" ? problem.detail : undefined;
-        const error = new Error(
-          detail ?? `App User management request failed (${response.status}).`,
-        ) as SyncHiveManagementError;
-        error.status = response.status;
-        error.title = typeof problem.title === "string" ? problem.title : undefined;
-        error.detail = detail;
-        error.code = typeof problem.code === "string" ? problem.code : undefined;
-        throw error;
-      }
-      throw new Error(`Request failed (${response.status}): ${text}`);
+      throw mapError(response, await response.text());
     }
 
     if (response.status === 204) {

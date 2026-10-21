@@ -89,7 +89,7 @@ describe("V2 token refresh", () => {
     await expect(client.get("Product", "P1")).rejects.toThrow(
       "Failed to fetch",
     );
-    expect(await client.getUser()).not.toBeNull();
+    expect(await client.getCurrentUser()).not.toBeNull();
     expect(events.at(-1)?.isAuthenticated).toBe(true);
 
     await client.get("Product", "P1");
@@ -105,6 +105,17 @@ describe("V2 token refresh", () => {
   });
 
   it("makes one refresh request when two tabs refresh at once", async () => {
+    // Model browser Web Locks even when the Node runtime does not provide them.
+    let lock = Promise.resolve();
+    vi.stubGlobal("navigator", {
+      locks: {
+        request: (_name: string, action: () => Promise<unknown>) => {
+          const result = lock.then(action);
+          lock = result.then(() => undefined, () => undefined);
+          return result;
+        },
+      },
+    });
     const storage = memoryStorage();
     const refresh = deferred<Response>();
     const { fetch, calls } = fakeFetch({
@@ -159,7 +170,7 @@ describe("V2 token refresh", () => {
     refresh.resolve(new Response(null, { status: 401 }));
     await request;
 
-    expect((await client.getUser())?.id).toBe("new");
+    expect((await client.getCurrentUser())?.id).toBe("new");
   });
 
   it("signs out with a refreshed token when the access token has expired", async () => {
@@ -181,7 +192,7 @@ describe("V2 token refresh", () => {
     expect(authCalls(calls, "/logout")[0]?.headers.get("Authorization")).toBe(
       `Bearer ${issued(1, 3600).accessToken}`,
     );
-    expect(await client.getUser()).toBeNull();
+    expect(await client.getCurrentUser()).toBeNull();
   });
 
   describe("init()", () => {
@@ -201,7 +212,7 @@ describe("V2 token refresh", () => {
       await client.init();
 
       expect(refreshBodies(calls)).toEqual([{ refreshToken: "refresh-0" }]);
-      expect((await client.getUser())?.expired).toBe(false);
+      expect((await client.getCurrentUser())?.expired).toBe(false);
       expect(events.at(-1)?.isAuthenticated).toBe(true);
     });
 
@@ -224,7 +235,7 @@ describe("V2 token refresh", () => {
       );
 
       await expect(client.init()).resolves.toBeUndefined();
-      expect(await client.getUser()).not.toBeNull();
+      expect(await client.getCurrentUser()).not.toBeNull();
 
       await client.get("Product", "P1");
       expect(refreshBodies(calls)).toHaveLength(2);
@@ -282,7 +293,7 @@ describe("V2 token refresh", () => {
 
       expect(refreshBodies(calls)).toHaveLength(1);
       expect(vi.getTimerCount()).toBe(0);
-      expect(await client.getUser()).not.toBeNull();
+      expect(await client.getCurrentUser()).not.toBeNull();
     });
 
     it("is scheduled by init() for a stored session that's still fresh", async () => {

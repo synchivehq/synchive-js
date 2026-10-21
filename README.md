@@ -183,7 +183,9 @@ Common
 - `uploadFile(file: File, options?: { fileHiveId?: string }): Promise<{ fileHiveId: string; uploadUrl: string; uploadToken: string; expiresOn: string }>`
 - `downloadFile(fileHiveId: string): Promise<{ fileHiveId: string; fileName: string; fileSize: number; contentType?: string; blob: Blob }>`
 - `deleteFile(fileHiveId: string): Promise<void>`
-- `getUser(): Promise<SyncHiveUser | null>`
+- `getCurrentUser(): Promise<SyncHiveUser | null>`
+
+`getCurrentUser()` returns the signed-in user's access-token claims, or `null` when signed out. `getUser()` remains as a deprecated alias. `getAppUser(accountHiveId)` fetches a user management record from the server, including their enabled status and visible role assignments.
 
 User management
 
@@ -220,7 +222,7 @@ Advanced
 - On initial mount, the first emitted event can be either `"authenticated"` or `"unauthenticated"` depending on whether a valid session already exists.
 - `getPermissions()` returns the signed-in user's `appUserManagementPermission` (`NONE`, `VIEW`, or `EDIT`), plus Roles and Policies as `{ id, name }` objects.
 - `getPermissions()` and user management methods return a 403 error when SyncHive Roles are disabled. `VIEW` allows viewing users and assignments; `EDIT` allows changes. Protected Roles can only be assigned by their members.
-- User management failures throw a `SyncHiveManagementError` with `status`, `title`, and `detail`.
+- HTTP failures from `getPermissions()` and user management methods throw the exported `SyncHiveManagementError` class, so callers can use `error instanceof SyncHiveManagementError`. It has `status` and optional `title`, `detail`, and `code` fields. Its message uses the response detail, then title, then body text, then a generic message. Authentication failures before the request and network failures propagate their original errors.
 - `uploadFile()` / `downloadFile()` are convenience wrappers: they call `createUploadUrl()` / `createDownloadUrl()` for you, then PUT/fetch the file bytes to/from that URL.
 - `createUploadUrl()` / `createDownloadUrl()` are for when you need more control over the file transfer than `uploadFile()` / `downloadFile()` give you — e.g. tracking upload progress via `XMLHttpRequest`'s `upload.onprogress`.
 

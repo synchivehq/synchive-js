@@ -18,6 +18,10 @@ export const getApiBaseUrl = (parsed: ParsedPublishableKey): string => {
   return `${getApisHost(parsed)}/v2/hives/${encodeURIComponent(parsed.tenantHiveId)}`;
 };
 
+export const getAuthBaseUrl = (parsed: ParsedPublishableKey): string => {
+  return `${getApisHost(parsed)}/v1/hives/${encodeURIComponent(parsed.tenantHiveId)}/auth`;
+};
+
 /** Decodes a `{prefix}{region}_{base64(env::tenantHiveId::encryptedKey)}` V2 key. */
 export const decodePublishableKey = (
   publishableKey: string,

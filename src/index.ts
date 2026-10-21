@@ -1,4 +1,5 @@
 export { SyncHiveClient } from "./client";
+export { SyncHiveManagementError } from "./types";
 export type {
   AuthState,
   AuthStateChangeListener,
@@ -30,5 +31,4 @@ export type {
   AppManagementRole,
   AppRoleListParams,
   AppRoleCollection,
-  SyncHiveManagementError,
 } from "./types";

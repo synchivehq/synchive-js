@@ -141,10 +141,19 @@ export type AppUser = {
   /** Assignments visible in this App Registration's Scope. */
   roles: AppUserRole[];
 };
-export type AppUserListParams = { top?: number; skip?: number; filter?: string };
+export type AppUserListParams = {
+  /** Maximum users per page: 1–1000, default 10. */
+  top?: number;
+  /** Number of matching users to skip, default 0. Independent of top. */
+  skip?: number;
+  /** Case-insensitive contains(email,'text'); double apostrophes to escape them. Search text is limited to 320 characters. */
+  filter?: string;
+};
 export type AppUserCollection = {
   value: AppUser[];
+  /** Total number of matching users across all pages. */
   count: number;
+  /** Server-provided next-page URL. The SDK does not fetch it automatically. */
   nextLink?: string;
 };
 export type AppUserUpdate = { isEnabled: boolean };
@@ -159,18 +168,38 @@ export type AppManagementRole = {
   appUserManagementPermission: AppUserManagementPermission;
   isProtected: boolean;
 };
-export type AppRoleListParams = { pageNumber?: number; pageSize?: number };
+export type AppRoleListParams = {
+  /** Maximum roles per page: 1–1000, default 10. */
+  top?: number;
+  /** Number of matching roles to skip, default 0. Independent of top. */
+  skip?: number;
+  /** Case-insensitive contains(name,'text'); double apostrophes to escape them. Search text is limited to 320 characters. */
+  filter?: string;
+};
 export type AppRoleCollection = {
-  items: AppManagementRole[];
-  pageNumber: number;
-  pageSize: number;
-  totalSize: number;
+  value: AppManagementRole[];
+  /** Total number of matching roles across all pages. */
+  count: number;
+  /** Server-provided next-page URL. The SDK does not fetch it automatically. */
+  nextLink?: string;
 };
 
-/** HTTP problem returned by the App User management APIs. */
-export type SyncHiveManagementError = Error & {
-  status: number;
-  title?: string;
-  detail?: string;
-  code?: string;
-};
+/** HTTP failure returned by getPermissions() or the App User management APIs. */
+export class SyncHiveManagementError extends Error {
+  readonly status: number;
+  readonly title?: string;
+  readonly detail?: string;
+  readonly code?: string;
+
+  constructor(
+    message: string,
+    problem: { status: number; title?: string; detail?: string; code?: string },
+  ) {
+    super(message);
+    this.name = "SyncHiveManagementError";
+    this.status = problem.status;
+    this.title = problem.title;
+    this.detail = problem.detail;
+    this.code = problem.code;
+  }
+}

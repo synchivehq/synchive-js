@@ -41,7 +41,7 @@ describe("sign-up", () => {
       options: { emailRedirectTo: "https://app.test/verify" },
     });
     expect(request?.headers.get("x-PublishableKey")).toBe(v2Key());
-    expect(await client.getUser()).toBeNull();
+    expect(await client.getCurrentUser()).toBeNull();
     expect(events.map((event) => event.isAuthenticated)).toEqual([false]);
   });
 
@@ -93,7 +93,7 @@ describe("sign-up", () => {
     const [first, second] = authCalls(calls, "/confirm");
     expect(first?.body).toEqual({ token: "verify-1" });
     expect(second?.body).toEqual({ token: "verify-1", password: "pw" });
-    expect((await client.getUser())?.id).toBe("user-1");
+    expect((await client.getCurrentUser())?.id).toBe("user-1");
   });
 
   it("doesn't send an expired registration token", async () => {
