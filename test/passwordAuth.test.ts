@@ -96,7 +96,7 @@ describe("V2 password auth", () => {
     });
 
     await client.signInWithPassword({ email: "a@b.c", password: "pw" });
-    const user = await client.getUser();
+    const user = await client.getCurrentUser();
 
     expect(user).not.toHaveProperty("refreshToken");
     expect(user?.expired).toBe(false);
@@ -115,7 +115,7 @@ describe("V2 password auth", () => {
 
     await client.signInWithPassword({ email: "a@b.c", password: "pw" });
 
-    expect({ ...(await client.getUser()) }).toEqual({
+    expect({ ...(await client.getCurrentUser()) }).toEqual({
       id: "user-1",
       email: "ada@example.com",
       name: "Ada",
@@ -131,7 +131,7 @@ describe("V2 password auth", () => {
     });
 
     vi.setSystemTime(new Date("2026-01-01T01:00:00Z"));
-    expect((await client.getUser())?.expired).toBe(true);
+    expect((await client.getCurrentUser())?.expired).toBe(true);
   });
 
   it("shares one refresh between concurrent requests", async () => {
@@ -163,7 +163,7 @@ describe("V2 password auth", () => {
     await expect(client.get("Product", "P1")).rejects.toThrow(
       "User is not authenticated. Call signInWithPassword() first.",
     );
-    expect(await client.getUser()).toBeNull();
+    expect(await client.getCurrentUser()).toBeNull();
     expect(events.at(-1)?.isAuthenticated).toBe(false);
   });
 
@@ -189,7 +189,7 @@ describe("V2 password auth", () => {
     refresh.resolve(Response.json(tokens({ sub: "old" }, 3600, "rotated-old")));
     await request;
 
-    expect((await client.getUser())?.id).toBe("new");
+    expect((await client.getCurrentUser())?.id).toBe("new");
     const apiCall = calls.find(
       (call) => call.url === `${API}/shape/Product/P1`,
     );
@@ -204,7 +204,7 @@ describe("V2 password auth", () => {
     const { client, events } = createClient({}, storage);
 
     await expect(client.init()).resolves.toBeUndefined();
-    expect(await client.getUser()).toBeNull();
+    expect(await client.getCurrentUser()).toBeNull();
     expect(events).toEqual([{ user: null, isAuthenticated: false }]);
   });
 
@@ -224,7 +224,7 @@ describe("V2 password auth", () => {
     expect(logout?.headers.get("Authorization")).toBe(
       `Bearer ${signedIn.accessToken}`,
     );
-    expect(await client.getUser()).toBeNull();
+    expect(await client.getCurrentUser()).toBeNull();
     expect(events.at(-1)?.isAuthenticated).toBe(false);
   });
 

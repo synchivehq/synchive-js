@@ -1,5 +1,5 @@
 import {
-  getApisHost,
+  getAuthBaseUrl,
   normalizeBase64,
   type ParsedPublishableKey,
 } from "../publishableKey";
@@ -106,7 +106,7 @@ export class PasswordAuth {
     fetchFn: FetchLike;
   }) {
     this.publishableKey = input.publishableKey;
-    this.authBaseUrl = `${getApisHost(input.parsed)}/v1/hives/${encodeURIComponent(input.parsed.tenantHiveId)}/auth`;
+    this.authBaseUrl = getAuthBaseUrl(input.parsed);
     this.storage = input.storage;
     this.storageKey = `synchive.session:${input.publishableKey}`;
     this.registrationStorageKey = `synchive.registration:${input.publishableKey}`;
@@ -216,7 +216,7 @@ export class PasswordAuth {
     await this.readAuthResponse<void>(response);
   }
 
-  async getUser(): Promise<SyncHiveUser | null> {
+  async getCurrentUser(): Promise<SyncHiveUser | null> {
     return toUser(this.readSession());
   }
 

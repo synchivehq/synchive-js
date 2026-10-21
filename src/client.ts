@@ -8,8 +8,17 @@ import {
   type RegistrationCompletion,
   type VerificationResend,
 } from "./auth/password";
-import { decodePublishableKey, getApiBaseUrl } from "./publishableKey";
+import { decodePublishableKey, getApiBaseUrl, getAuthBaseUrl } from "./publishableKey";
+import { SyncHiveManagementError } from "./types";
 import type {
+  AppUser,
+  AppUserCollection,
+  AppUserListParams,
+  AppUserUpdate,
+  AppRoleCollection,
+  AppRoleListParams,
+  SyncHivePermissions,
+  SyncHiveRoleAssignment,
   AuthState,
   AuthStateChangeListener,
   AuthStateChangeTrigger,
@@ -96,8 +105,32 @@ const getDefaultFetch = (): FetchLike => {
   throw new Error("Fetch API is not available in this environment.");
 };
 
+const managementError = (response: Response, body: string): Error => {
+  let problem: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      problem = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Preserve the response body when the server does not return JSON.
+  }
+  const title = typeof problem.title === "string" ? problem.title : undefined;
+  const detail = typeof problem.detail === "string" ? problem.detail : undefined;
+  const code = typeof problem.code === "string" ? problem.code : undefined;
+  return new SyncHiveManagementError(
+    detail ||
+      title ||
+      body ||
+      `App User management request failed (${response.status}).`,
+    { status: response.status, title, detail, code },
+  );
+};
+
 export class SyncHiveClient {
   private readonly apiBaseUrl: string;
+  private readonly authBaseUrl: string;
+  private readonly managementBaseUrl: string;
   private readonly fetchFn: FetchLike;
   private readonly auth: PasswordAuth;
 
@@ -108,9 +141,7 @@ export class SyncHiveClient {
     }
 
     const parsedPublishableKey = decodePublishableKey(publishableKey);
-    const apiBaseUrl = applyTenantAppBasePathToApiBaseUrl(
-      getApiBaseUrl(parsedPublishableKey),
-    );
+    const apiBaseUrl = getApiBaseUrl(parsedPublishableKey);
 
     const storage = options.storage ?? getDefaultStorage();
     if (!storage) {
@@ -119,7 +150,9 @@ export class SyncHiveClient {
       );
     }
 
-    this.apiBaseUrl = apiBaseUrl;
+    this.apiBaseUrl = applyTenantAppBasePathToApiBaseUrl(apiBaseUrl);
+    this.managementBaseUrl = apiBaseUrl;
+    this.authBaseUrl = getAuthBaseUrl(parsedPublishableKey);
     this.fetchFn = options.fetch ?? getDefaultFetch();
     this.auth = new PasswordAuth({
       publishableKey,
@@ -175,8 +208,99 @@ export class SyncHiveClient {
     await this.auth.completePasswordReset(completion);
   }
 
-  async getUser(): Promise<SyncHiveUser | null> {
-    return this.auth.getUser();
+  /** Returns the signed-in user's access-token claims without fetching an App User record. */
+  async getCurrentUser(): Promise<SyncHiveUser | null> {
+    return this.auth.getCurrentUser();
+  }
+
+  /** Current permission and Role/Policy names in this app's Scope. Always fetches from the server. */
+  async getPermissions(): Promise<SyncHivePermissions> {
+    return this.request<SyncHivePermissions>(
+      `${this.authBaseUrl}/me`,
+      { cache: "no-store" },
+      managementError,
+    );
+  }
+
+  async listAppUsers(params?: AppUserListParams): Promise<AppUserCollection> {
+    return this.managementRequest<AppUserCollection>("/auth-users", {}, params);
+  }
+
+  async getAppUser(accountHiveId: string): Promise<AppUser> {
+    return this.managementRequest<AppUser>(
+      `/auth-users/${encodeURIComponent(accountHiveId)}`,
+    );
+  }
+
+  /** Updates administrative status. Role assignments use assignAppUserRole/removeAppUserRole. */
+  async updateAppUser(
+    accountHiveId: string,
+    update: AppUserUpdate,
+  ): Promise<AppUser> {
+    return this.managementRequest<AppUser>(
+      `/auth-users/${encodeURIComponent(accountHiveId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/merge-patch+json" },
+        body: JSON.stringify(update),
+      },
+    );
+  }
+
+  async deleteAppUser(accountHiveId: string): Promise<void> {
+    return this.managementRequest<void>(
+      `/auth-users/${encodeURIComponent(accountHiveId)}`,
+      { method: "DELETE" },
+    );
+  }
+
+  /** Adds one assignment idempotently, preserving every other membership. */
+  async assignAppUserRole(
+    accountHiveId: string,
+    roleId: number,
+  ): Promise<SyncHiveRoleAssignment> {
+    return this.managementRequest<SyncHiveRoleAssignment>(
+      `/auth-users/${encodeURIComponent(accountHiveId)}/roles/${encodeURIComponent(String(roleId))}`,
+      { method: "PUT", body: "{}" },
+    );
+  }
+
+  async removeAppUserRole(accountHiveId: string, roleId: number): Promise<void> {
+    return this.managementRequest<void>(
+      `/auth-users/${encodeURIComponent(accountHiveId)}/roles/${encodeURIComponent(String(roleId))}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async listAppRoles(params?: AppRoleListParams): Promise<AppRoleCollection> {
+    return this.managementRequest<AppRoleCollection>("/auth-roles", {}, params);
+  }
+
+  async listRoleMembers(
+    roleId: number,
+    params?: AppUserListParams,
+  ): Promise<AppUserCollection> {
+    return this.managementRequest<AppUserCollection>(
+      `/auth-roles/${encodeURIComponent(String(roleId))}/members`,
+      {},
+      params,
+    );
+  }
+
+  private managementRequest<T>(
+    path: string,
+    init: RequestInit = {},
+    params?: AppUserListParams | AppRoleListParams,
+  ): Promise<T> {
+    const url = new URL(`${this.managementBaseUrl}${path}`);
+    for (const [key, value] of Object.entries(params ?? {})) {
+      if (value !== undefined) url.searchParams.set(key, String(value));
+    }
+    return this.request<T>(
+      url.toString(),
+      { cache: "no-store", ...init },
+      managementError,
+    );
   }
 
   onAuthStateChange(
@@ -278,7 +402,12 @@ export class SyncHiveClient {
     return this.request<DownloadFileResult>(url);
   }
 
-  private async request<T>(url: string, init: RequestInit = {}): Promise<T> {
+  private async request<T>(
+    url: string,
+    init: RequestInit = {},
+    mapError: (response: Response, body: string) => Error = (response, body) =>
+      new Error(`Request failed (${response.status}): ${body}`),
+  ): Promise<T> {
     const headers = new Headers(init.headers ?? {});
     await this.auth.authorize(headers);
     headers.set("Accept", "application/json");
@@ -293,8 +422,7 @@ export class SyncHiveClient {
     });
 
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Request failed (${response.status}): ${text}`);
+      throw mapError(response, await response.text());
     }
 
     if (response.status === 204) {

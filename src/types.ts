@@ -110,3 +110,96 @@ export type SynchiveClientOptions = {
   storage?: Storage;
   fetch?: FetchLike;
 };
+
+/** Resolved from current assignments in the App Registration default Role's Scope. */
+export type AppUserManagementPermission = "NONE" | "VIEW" | "EDIT";
+
+export type SyncHivePermissionPolicy = {
+  id: number;
+  name: string;
+};
+export type SyncHivePermissionRole = {
+  id: number;
+  name: string;
+};
+export type SyncHivePermissions = {
+  appUserManagementPermission: AppUserManagementPermission;
+  roles: SyncHivePermissionRole[];
+  policies: SyncHivePermissionPolicy[];
+};
+
+export type AppUserRole = {
+  id: number;
+  name: string;
+  scopeId: number;
+  scopeName: string;
+};
+export type AppUser = {
+  /** Encoded account Hive ID, not a raw numeric ID or the owning Hive identifier. */
+  hiveId: string;
+  isEnabled: boolean;
+  /** Assignments visible in this App Registration's Scope. */
+  roles: AppUserRole[];
+};
+export type AppUserListParams = {
+  /** Maximum users per page: 1–1000, default 10. */
+  top?: number;
+  /** Number of matching users to skip, default 0. Independent of top. */
+  skip?: number;
+  /** Case-insensitive contains(email,'text'); double apostrophes to escape them. Search text is limited to 320 characters. */
+  filter?: string;
+};
+export type AppUserCollection = {
+  value: AppUser[];
+  /** Total number of matching users across all pages. */
+  count: number;
+  /** Server-provided next-page URL. The SDK does not fetch it automatically. */
+  nextLink?: string;
+};
+export type AppUserUpdate = { isEnabled: boolean };
+export type SyncHiveRoleAssignment = { id: number; name: string };
+
+export type AppManagementRole = {
+  id: number;
+  name: string;
+  description: string;
+  scopeId: number;
+  isDefault: boolean;
+  appUserManagementPermission: AppUserManagementPermission;
+  isProtected: boolean;
+};
+export type AppRoleListParams = {
+  /** Maximum roles per page: 1–1000, default 10. */
+  top?: number;
+  /** Number of matching roles to skip, default 0. Independent of top. */
+  skip?: number;
+  /** Case-insensitive contains(name,'text'); double apostrophes to escape them. Search text is limited to 320 characters. */
+  filter?: string;
+};
+export type AppRoleCollection = {
+  value: AppManagementRole[];
+  /** Total number of matching roles across all pages. */
+  count: number;
+  /** Server-provided next-page URL. The SDK does not fetch it automatically. */
+  nextLink?: string;
+};
+
+/** HTTP failure returned by getPermissions() or the App User management APIs. */
+export class SyncHiveManagementError extends Error {
+  readonly status: number;
+  readonly title?: string;
+  readonly detail?: string;
+  readonly code?: string;
+
+  constructor(
+    message: string,
+    problem: { status: number; title?: string; detail?: string; code?: string },
+  ) {
+    super(message);
+    this.name = "SyncHiveManagementError";
+    this.status = problem.status;
+    this.title = problem.title;
+    this.detail = problem.detail;
+    this.code = problem.code;
+  }
+}

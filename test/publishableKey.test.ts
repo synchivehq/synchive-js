@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodePublishableKey, getApiBaseUrl } from "../src/publishableKey";
+import { decodePublishableKey, getApiBaseUrl, getAuthBaseUrl } from "../src/publishableKey";
 import { base64Url, legacyKey, v1Key, v2Key } from "./helpers";
 
 describe("decodePublishableKey", () => {
@@ -54,5 +54,16 @@ describe("decodePublishableKey", () => {
     expect(() => decodePublishableKey(v2Key("dev::HIVE1"))).toThrow(
       "publishableKey payload is invalid.",
     );
+  });
+});
+
+
+describe("getAuthBaseUrl", () => {
+  it.each([
+    ["prod", "https://us-west-2-apis.synchive.com"],
+    ["dev", "https://us-west-2-apis.dev.synchive.com"],
+  ])("builds the shared auth URL for %s keys with an encoded Hive identifier", (environment, host) => {
+    const parsed = decodePublishableKey(v2Key(`${environment}::HIVE/a b?::secret`));
+    expect(getAuthBaseUrl(parsed)).toBe(`${host}/v1/hives/HIVE%2Fa%20b%3F/auth`);
   });
 });
