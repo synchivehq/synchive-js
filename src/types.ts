@@ -80,6 +80,10 @@ export type SyncHiveAuthErrorCode =
   | "superseded_password_reset_link"
   | "used_password_reset_link"
   | "expired_password_reset_link"
+  | "invalid_email_change_link"
+  | "superseded_email_change_link"
+  | "used_email_change_link"
+  | "expired_email_change_link"
   // Keeps codes the server adds later assignable without losing autocomplete.
   | (string & {});
 
@@ -127,6 +131,42 @@ export type SyncHivePermissions = {
   roles: SyncHivePermissionRole[];
   policies: SyncHivePermissionPolicy[];
 };
+
+export type SyncHiveAccountStatus = "ENABLED" | "UNVERIFIED" | "DISABLED";
+
+export type SyncHiveAccount = {
+  /** Encoded account Hive ID, not the owning Hive identifier. */
+  hiveId: string;
+  email: string | null;
+  /** RFC 3339 email verification timestamp. */
+  verifiedAt: string | null;
+  status: SyncHiveAccountStatus;
+};
+
+export type SyncHiveAccountResponse = SyncHivePermissions & {
+  account: SyncHiveAccount;
+};
+
+export type EmailChangeRequest = {
+  currentPassword: string;
+  newEmail: string;
+  /** Must match the app's allowed URLs, as with verification resend. */
+  verificationPageUrl: string;
+};
+
+export type EmailChangeRequestResult = { status: "VERIFICATION_REQUIRED" };
+
+export type EmailChangeConfirmation = {
+  /** The sh_email_change_token query parameter from the verification email. */
+  token: string;
+};
+
+export type EmailChangeConfirmationResult = {
+  status: "EMAIL_CHANGED";
+  requiresSignIn: true;
+};
+
+export type AccountDeletion = { currentPassword: string };
 
 export type AppUserRole = {
   id: number;
@@ -184,7 +224,7 @@ export type AppRoleCollection = {
   nextLink?: string;
 };
 
-/** HTTP failure returned by getPermissions() or the App User management APIs. */
+/** HTTP failure returned by getAccount(), getPermissions(), or the App User management APIs. */
 export class SyncHiveManagementError extends Error {
   readonly status: number;
   readonly title?: string;

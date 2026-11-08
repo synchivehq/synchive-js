@@ -18,6 +18,13 @@ import type {
   AppRoleCollection,
   AppRoleListParams,
   SyncHivePermissions,
+  SyncHiveAccount,
+  SyncHiveAccountResponse,
+  EmailChangeRequest,
+  EmailChangeRequestResult,
+  EmailChangeConfirmation,
+  EmailChangeConfirmationResult,
+  AccountDeletion,
   SyncHiveRoleAssignment,
   AuthState,
   AuthStateChangeListener,
@@ -206,6 +213,35 @@ export class SyncHiveClient {
     completion: PasswordResetCompletion,
   ): Promise<void> {
     await this.auth.completePasswordReset(completion);
+  }
+
+  /** Current account details fetched from the server, including when managed Roles are disabled. */
+  async getAccount(): Promise<SyncHiveAccount> {
+    const response = await this.request<SyncHiveAccountResponse>(
+      `${this.authBaseUrl}/me`,
+      { cache: "no-store" },
+      managementError,
+    );
+    return response.account;
+  }
+
+  /** Verifies the current password and emails a link to the new address. */
+  async requestEmailChange(
+    request: EmailChangeRequest,
+  ): Promise<EmailChangeRequestResult> {
+    return this.auth.requestEmailChange(request);
+  }
+
+  /** Confirms the new email and clears the revoked session. Sign in again afterwards. */
+  async confirmEmailChange(
+    completion: EmailChangeConfirmation,
+  ): Promise<EmailChangeConfirmationResult> {
+    return this.auth.confirmEmailChange(completion);
+  }
+
+  /** Permanently deletes the signed-in account while preserving its ID and data references. */
+  async deleteAccount(request: AccountDeletion): Promise<void> {
+    await this.auth.deleteAccount(request);
   }
 
   /** Returns the signed-in user's access-token claims without fetching an App User record. */
