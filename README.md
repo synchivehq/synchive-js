@@ -184,6 +184,10 @@ Common
 - `downloadFile(fileHiveId: string): Promise<{ fileHiveId: string; fileName: string; fileSize: number; contentType?: string; blob: Blob }>`
 - `deleteFile(fileHiveId: string): Promise<void>`
 - `getCurrentUser(): Promise<SyncHiveUser | null>`
+- `getAccount(): Promise<SyncHiveAccount>`
+- `requestEmailChange(request: { currentPassword: string; newEmail: string; verificationPageUrl: string }): Promise<EmailChangeRequestResult>`
+- `confirmEmailChange(completion: { token: string }): Promise<EmailChangeConfirmationResult>`
+- `deleteAccount(request: { currentPassword: string }): Promise<void>`
 
 User management
 
@@ -207,7 +211,7 @@ Advanced
 - Tokens are stored in `localStorage`. Be aware any XSS in your app can expose these tokens.
 - `init()` restores the stored session.
 - Password sign-in and token refresh automatically include your configured publishable key to identify the app.
-- `signUpWithPassword()`, `resendVerification()` and `requestPasswordReset()` throw a `SyncHiveAuthError` with `code` `invalid_redirect` if `verificationPageUrl` or `passwordResetPageUrl` isn't one of your app's allowed App URLs in SyncHive.
+- `signUpWithPassword()`, `resendVerification()`, `requestPasswordReset()` and `requestEmailChange()` throw a `SyncHiveAuthError` with `code` `invalid_redirect` if `verificationPageUrl` or `passwordResetPageUrl` isn't one of your app's allowed App URLs in SyncHive.
 - `signInWithPassword()` throws a `SyncHiveAuthError` with `code` `account_email_not_verified` if the user hasn't confirmed their email yet.
 - `signUpWithPassword()` emails a link to `verificationPageUrl` with `sh_verification_token` added to the query. It doesn't sign the user in. It throws a `SyncHiveAuthError` with `code` `email_already_in_use` if the email already has an account, including one awaiting verification, or `invalid_password` if the password doesn't meet the password policy.
 - `completeRegistration()` takes the `sh_verification_token` query parameter from the verification email link, and signs the user in. When the user confirms in the same browser they signed up in, the SDK proves the sign-up for them. Otherwise it throws `registration_password_required`: ask for the password they signed up with and call it again with `password`. A wrong password throws `incorrect_password`, a link replaced by a newer one throws `superseded_verification_link`, and a used, expired or unknown link throws `invalid_confirmation`.
@@ -215,12 +219,16 @@ Advanced
 - `changePassword()` requires a signed-in user. It throws a `SyncHiveAuthError` with `code` `incorrect_password` if `currentPassword` is wrong, or `invalid_password` if `newPassword` doesn't meet the password policy.
 - `requestPasswordReset()` emails a single-use link, valid for 24 hours, to `passwordResetPageUrl` with `sh_password_reset_token` added to the query. The account's email must be verified (`account_email_not_verified` otherwise), and a new email can be requested once every 60 seconds (`email_request_rate_limited` otherwise).
 - `completePasswordReset()` takes the `sh_password_reset_token` query parameter from the reset email link. Used, expired or superseded links throw `used_password_reset_link`, `expired_password_reset_link` or `superseded_password_reset_link`. A reset signs the user out everywhere and doesn't sign them in, so send them to sign in afterwards.
+- `getAccount()` fetches current account details (`hiveId`, `email`, `verifiedAt`, `status`); `getCurrentUser()` reads local access-token claims.
+- `requestEmailChange()` requires a signed-in user and their current password. The original email stays active until confirmation. Links are single-use, expire after 24 hours, and can be requested once every 60 seconds.
+- Pass the emailed `sh_email_change_token` to `confirmEmailChange()` while signed in as the same account and App Registration, then remove it from the callback URL. Success signs the user out everywhere; sign in again with the new email.
+- `deleteAccount()` requires the current password and permanently deletes the signed-in account. Success signs the user out everywhere. These email-change/deletion methods throw `SyncHiveAuthError` on HTTP failures.
 - `onAuthStateChange()` calls your listener immediately with current state, then again whenever auth state changes.
 - Auth lifecycle event names are exported as SDK types via `AuthStateChangeTrigger`: `"authenticated"` and `"unauthenticated"`.
 - On initial mount, the first emitted event can be either `"authenticated"` or `"unauthenticated"` depending on whether a valid session already exists.
 - `getPermissions()` returns the signed-in user's `appUserManagementPermission` (`NONE`, `VIEW`, or `EDIT`), plus Roles and Policies as `{ id, name }` objects.
-- `getPermissions()` and user management methods return a 403 error when SyncHive Roles are disabled. `VIEW` allows viewing users and assignments; `EDIT` allows changes. Protected Roles can only be assigned by their members.
-- HTTP failures from `getPermissions()` and user management methods throw the exported `SyncHiveManagementError` class, so callers can use `error instanceof SyncHiveManagementError`. It has `status` and optional `title`, `detail`, and `code` fields. Its message uses the response detail, then title, then body text, then a generic message. Authentication failures before the request and network failures propagate their original errors.
+- With SyncHive Roles disabled, `getAccount()` still returns account details and `getPermissions()` returns `NONE` with empty Roles and Policies. User management methods require SyncHive Roles to be enabled. `VIEW` allows viewing users and assignments; `EDIT` allows changes. Protected Roles can only be assigned by their members.
+- HTTP failures from `getAccount()`, `getPermissions()` and user management methods throw the exported `SyncHiveManagementError` class, so callers can use `error instanceof SyncHiveManagementError`. It has `status` and optional `title`, `detail`, and `code` fields. Its message uses the response detail, then title, then body text, then a generic message. Authentication failures before the request and network failures propagate their original errors.
 - `uploadFile()` / `downloadFile()` are convenience wrappers: they call `createUploadUrl()` / `createDownloadUrl()` for you, then PUT/fetch the file bytes to/from that URL.
 - `createUploadUrl()` / `createDownloadUrl()` are for when you need more control over the file transfer than `uploadFile()` / `downloadFile()` give you — e.g. tracking upload progress via `XMLHttpRequest`'s `upload.onprogress`.
 

@@ -3,7 +3,16 @@ import {
   normalizeBase64,
   type ParsedPublishableKey,
 } from "../publishableKey";
-import type { FetchLike, SyncHiveAuthError, SyncHiveUser } from "../types";
+import type {
+  FetchLike,
+  SyncHiveAuthError,
+  SyncHiveUser,
+  EmailChangeRequest,
+  EmailChangeRequestResult,
+  EmailChangeConfirmation,
+  EmailChangeConfirmationResult,
+  AccountDeletion,
+} from "../types";
 
 export type PasswordCredentials = {
   email: string;
@@ -85,6 +94,9 @@ const PUBLISHABLE_KEY_PATHS = new Set([
   "/verification/resend",
   "/password/change",
   "/password/reset/request",
+  "/email/change/request",
+  "/email/change/confirm",
+  "/account/delete",
 ]);
 
 /** Email and password sign-in, with sessions kept in storage and refreshed before expiry. */
@@ -97,6 +109,7 @@ export class PasswordAuth {
   private readonly fetchFn: FetchLike;
   private readonly listeners = new Set<(user: SyncHiveUser | null) => void>();
   private refreshPromise?: Promise<Session | null>;
+  private sessionOperation: Promise<void> = Promise.resolve();
   private refreshTimer?: ReturnType<typeof setTimeout>;
 
   constructor(input: {
@@ -120,10 +133,12 @@ export class PasswordAuth {
   }
 
   async signInWithPassword(credentials: PasswordCredentials): Promise<void> {
-    const response = await this.authRequest("/sign-in/password", credentials);
-    this.setSession(
-      sessionFromTokens(await this.readAuthResponse<Tokens>(response)),
-    );
+    await this.withSessionLock(async () => {
+      const response = await this.authRequest("/sign-in/password", credentials);
+      this.setSession(
+        sessionFromTokens(await this.readAuthResponse<Tokens>(response)),
+      );
+    });
   }
 
   async signUpWithPassword({
@@ -162,14 +177,16 @@ export class PasswordAuth {
     token,
     password,
   }: RegistrationCompletion): Promise<void> {
-    const response = await this.authRequest("/confirm", {
-      token,
-      registrationSessionToken: this.readRegistration()?.token,
-      password,
+    await this.withSessionLock(async () => {
+      const response = await this.authRequest("/confirm", {
+        token,
+        registrationSessionToken: this.readRegistration()?.token,
+        password,
+      });
+      const tokens = await this.readAuthResponse<Tokens>(response);
+      this.storage.removeItem(this.registrationStorageKey);
+      this.setSession(sessionFromTokens(tokens));
     });
-    const tokens = await this.readAuthResponse<Tokens>(response);
-    this.storage.removeItem(this.registrationStorageKey);
-    this.setSession(sessionFromTokens(tokens));
   }
 
   async signOut(): Promise<void> {
@@ -214,6 +231,66 @@ export class PasswordAuth {
   ): Promise<void> {
     const response = await this.authRequest("/password/reset", completion);
     await this.readAuthResponse<void>(response);
+  }
+
+  async requestEmailChange({
+    currentPassword,
+    newEmail,
+    verificationPageUrl,
+  }: EmailChangeRequest): Promise<EmailChangeRequestResult> {
+    const session = await this.getAuthenticatedSession();
+    const response = await this.authRequest(
+      "/email/change/request",
+      {
+        currentPassword,
+        newEmail,
+        options: { emailRedirectTo: verificationPageUrl },
+      },
+      session.accessToken,
+    );
+    return this.readAuthResponse<EmailChangeRequestResult>(response);
+  }
+
+  async confirmEmailChange(
+    completion: EmailChangeConfirmation,
+  ): Promise<EmailChangeConfirmationResult> {
+    const session = await this.getAuthenticatedSession();
+    return this.withSessionLock(async () => {
+      const response = await this.authRequest(
+        "/email/change/confirm",
+        completion,
+        session.accessToken,
+      );
+      const result =
+        await this.readAuthResponse<EmailChangeConfirmationResult>(response);
+      this.clearRevokedSession(session);
+      return result;
+    });
+  }
+
+  async deleteAccount(request: AccountDeletion): Promise<void> {
+    const session = await this.getAuthenticatedSession();
+    await this.withSessionLock(async () => {
+      const response = await this.authRequest(
+        "/account/delete",
+        request,
+        session.accessToken,
+      );
+      await this.readAuthResponse<void>(response);
+      this.clearRevokedSession(session);
+    });
+  }
+
+  private clearRevokedSession(session: Session): void {
+    const current = this.readSession();
+    // Revocation covers every session for this account.
+    if (
+      current?.accessToken === session.accessToken ||
+      (typeof session.claims.sub === "string" &&
+        current?.claims.sub === session.claims.sub)
+    ) {
+      this.setSession(null);
+    }
   }
 
   async getCurrentUser(): Promise<SyncHiveUser | null> {
@@ -303,7 +380,7 @@ export class PasswordAuth {
 
   private refreshSession(): Promise<Session | null> {
     // Refresh tokens are single use: share one refresh per client and lock across tabs.
-    this.refreshPromise ??= this.withRefreshLock(async () => {
+    this.refreshPromise ??= this.withSessionLock(async () => {
       const session = this.readSession();
       // Another tab may have refreshed while this one waited for the lock.
       if (!session || !needsRefresh(session)) return session;
@@ -324,11 +401,16 @@ export class PasswordAuth {
     return this.refreshPromise;
   }
 
-  private async withRefreshLock<T>(action: () => Promise<T>): Promise<T> {
-    if (typeof navigator !== "undefined" && navigator.locks) {
-      return await navigator.locks.request(this.storageKey, action);
-    }
-    return action();
+  private withSessionLock<T>(action: () => Promise<T>): Promise<T> {
+    const operation = this.sessionOperation.then(async (): Promise<T> => {
+      if (typeof navigator !== "undefined" && navigator.locks) {
+        return await navigator.locks.request(this.storageKey, action);
+      }
+      return await action();
+    });
+    // A failed request must not prevent the next session operation.
+    this.sessionOperation = operation.then(() => undefined, () => undefined);
+    return operation;
   }
 
   private authRequest(
