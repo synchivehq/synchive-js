@@ -283,7 +283,7 @@ export class PasswordAuth {
 
   private clearRevokedSession(session: Session): void {
     const current = this.readSession();
-    // Revocation covers every session for this account; preserve another user.
+    // Revocation covers every session for this account.
     if (
       current?.accessToken === session.accessToken ||
       (typeof session.claims.sub === "string" &&

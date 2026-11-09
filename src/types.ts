@@ -135,7 +135,7 @@ export type SyncHivePermissions = {
 export type SyncHiveAccountStatus = "ENABLED" | "UNVERIFIED" | "DISABLED";
 
 export type SyncHiveAccount = {
-  /** Encoded account Hive ID, not the owning Hive identifier. */
+  /** Unique ID of the App User account. */
   hiveId: string;
   email: string | null;
   /** RFC 3339 email verification timestamp. */
@@ -150,7 +150,7 @@ export type SyncHiveAccountResponse = SyncHivePermissions & {
 export type EmailChangeRequest = {
   currentPassword: string;
   newEmail: string;
-  /** Must match the app's allowed URLs, as with verification resend. */
+  /** Must match one of the app's allowed URLs. */
   verificationPageUrl: string;
 };
 

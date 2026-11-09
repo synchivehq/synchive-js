@@ -215,7 +215,7 @@ export class SyncHiveClient {
     await this.auth.completePasswordReset(completion);
   }
 
-  /** Current account details fetched from the server, including when managed Roles are disabled. */
+  /** Fetches the signed-in user's current account details. */
   async getAccount(): Promise<SyncHiveAccount> {
     const response = await this.request<SyncHiveAccountResponse>(
       `${this.authBaseUrl}/me`,
@@ -232,14 +232,14 @@ export class SyncHiveClient {
     return this.auth.requestEmailChange(request);
   }
 
-  /** Confirms the new email and clears the revoked session. Sign in again afterwards. */
+  /** Confirms the new email and signs the user out everywhere. Sign in again with the new email. */
   async confirmEmailChange(
     completion: EmailChangeConfirmation,
   ): Promise<EmailChangeConfirmationResult> {
     return this.auth.confirmEmailChange(completion);
   }
 
-  /** Permanently deletes the signed-in account while preserving its ID and data references. */
+  /** Permanently deletes the signed-in account and signs the user out. */
   async deleteAccount(request: AccountDeletion): Promise<void> {
     await this.auth.deleteAccount(request);
   }
