@@ -10,7 +10,7 @@ import {
   type Call,
 } from "./helpers";
 
-const user = { hiveId: "USER1", isEnabled: true, roles: [] };
+const user = { hiveId: "USER1", status: "ENABLED", roles: [] };
 const users = {
   value: [user],
   count: 3,
@@ -70,11 +70,11 @@ const operations: Operation[] = [
   },
   {
     name: "updateAppUser",
-    run: (client) => client.updateAppUser(accountId, { isEnabled: false }),
+    run: (client) => client.updateAppUser(accountId, { status: "DISABLED" }),
     url: `${API}/auth-users/${encodedAccountId}`,
     method: "PATCH",
-    result: { ...user, isEnabled: false },
-    body: { isEnabled: false },
+    result: { ...user, status: "DISABLED" },
+    body: { status: "DISABLED" },
     contentType: "application/merge-patch+json",
   },
   {
