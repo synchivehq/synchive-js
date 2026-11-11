@@ -187,7 +187,12 @@ export type AppUserListParams = {
   top?: number;
   /** Number of matching users to skip, default 0. Independent of top. */
   skip?: number;
-  /** Case-insensitive contains(email,'text'); double apostrophes to escape them. Search text is limited to 320 characters. */
+  /**
+   * Filter by status using eq/ne with ENABLED, DISABLED, UNVERIFIED or DELETED,
+   * or by case-insensitive contains(email,'text'). Combine with and/or and parentheses.
+   * Double apostrophes to escape them; email search text is limited to 320 characters.
+   * Role-member lists always exclude deleted accounts.
+   */
   filter?: string;
 };
 export type AppUserCollection = {
