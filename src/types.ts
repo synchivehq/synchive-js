@@ -177,7 +177,6 @@ export type AppUserRole = {
 export type AppUser = {
   /** Encoded account Hive ID, not a raw numeric ID or the owning Hive identifier. */
   hiveId: string;
-  isEnabled: boolean;
   /** Deleted accounts are permanently unavailable and have no roles. */
   status: SyncHiveAccountStatus;
   /** Assignments visible in this App Registration's Scope. */
@@ -198,7 +197,7 @@ export type AppUserCollection = {
   /** Server-provided next-page URL. The SDK does not fetch it automatically. */
   nextLink?: string;
 };
-export type AppUserUpdate = { isEnabled: boolean };
+export type AppUserUpdate = { status: "ENABLED" | "DISABLED" };
 export type SyncHiveRoleAssignment = { id: number; name: string };
 
 export type AppManagementRole = {
