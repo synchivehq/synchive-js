@@ -132,7 +132,7 @@ export type SyncHivePermissions = {
   policies: SyncHivePermissionPolicy[];
 };
 
-export type SyncHiveAccountStatus = "ENABLED" | "UNVERIFIED" | "DISABLED";
+export type SyncHiveAccountStatus = "ENABLED" | "UNVERIFIED" | "DISABLED" | "DELETED";
 
 export type SyncHiveAccount = {
   /** Unique ID of the App User account. */
@@ -178,10 +178,14 @@ export type AppUser = {
   /** Encoded account Hive ID, not a raw numeric ID or the owning Hive identifier. */
   hiveId: string;
   isEnabled: boolean;
+  /** Deleted accounts are permanently unavailable and have no roles. */
+  status: SyncHiveAccountStatus;
   /** Assignments visible in this App Registration's Scope. */
   roles: AppUserRole[];
 };
 export type AppUserListParams = {
+  /** Include permanently soft-deleted users in results and count, default true. */
+  includeDeleted?: boolean;
   /** Maximum users per page: 1–1000, default 10. */
   top?: number;
   /** Number of matching users to skip, default 0. Independent of top. */

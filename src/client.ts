@@ -314,7 +314,7 @@ export class SyncHiveClient {
 
   async listRoleMembers(
     roleId: number,
-    params?: AppUserListParams,
+    params?: Omit<AppUserListParams, "includeDeleted">,
   ): Promise<AppUserCollection> {
     return this.managementRequest<AppUserCollection>(
       `/auth-roles/${encodeURIComponent(String(roleId))}/members`,
