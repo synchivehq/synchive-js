@@ -199,7 +199,7 @@ User management
 - `assignAppUserRole(accountHiveId: string, roleId: number): Promise<SyncHiveRoleAssignment>`
 - `removeAppUserRole(accountHiveId: string, roleId: number): Promise<void>`
 - `listAppRoles(params?: AppRoleListParams): Promise<AppRoleCollection>`
-- `listRoleMembers(roleId: number, params?: Omit<AppUserListParams, "includeDeleted">): Promise<AppUserCollection>`
+- `listRoleMembers(roleId: number, params?: AppUserListParams): Promise<AppUserCollection>`
 
 Advanced
 
@@ -228,7 +228,7 @@ Advanced
 - On initial mount, the first emitted event can be either `"authenticated"` or `"unauthenticated"` depending on whether a valid session already exists.
 - `getPermissions()` returns the signed-in user's `appUserManagementPermission` (`NONE`, `VIEW`, or `EDIT`), plus Roles and Policies as `{ id, name }` objects.
 - With SyncHive Roles disabled, `getAccount()` still returns account details and `getPermissions()` returns `NONE` with empty Roles and Policies. User management methods require SyncHive Roles to be enabled. `VIEW` allows viewing users and assignments; `EDIT` allows changes. Protected Roles can only be assigned by their members.
-- `listAppUsers()` includes deleted accounts by default. Pass `{ includeDeleted: false }` when choosing users for role assignment. Results and count use the same filter; `nextLink` preserves it. `getAppUser()` can also retrieve retained deleted identities. `AppUser.status` is `ENABLED`, `UNVERIFIED`, `DISABLED`, or `DELETED`; deleted users have `isEnabled: false` and `roles: []`. Deleted accounts cannot be enabled or assigned roles, and `listRoleMembers()` always excludes them. Delegated `deleteAppUser()` retains its existing behavior; hard deletion of retained deleted accounts requires a Hive Admin in Connect.
+- `listAppUsers()` always includes deleted accounts in results and count. Filter out users with `status: "DELETED"` when choosing users for role assignment. `getAppUser()` can also retrieve retained deleted identities. `AppUser.status` is `ENABLED`, `UNVERIFIED`, `DISABLED`, or `DELETED`; deleted users have `isEnabled: false` and `roles: []`. Deleted accounts cannot be enabled or assigned roles, and `listRoleMembers()` always excludes them. Delegated `deleteAppUser()` retains its existing behavior; hard deletion of retained deleted accounts requires a Hive Admin in Connect.
 - HTTP failures from `getAccount()`, `getPermissions()` and user management methods throw the exported `SyncHiveManagementError` class, so callers can use `error instanceof SyncHiveManagementError`. It has `status` and optional `title`, `detail`, and `code` fields. Its message uses the response detail, then title, then body text, then a generic message. Authentication failures before the request and network failures propagate their original errors.
 - `uploadFile()` / `downloadFile()` are convenience wrappers: they call `createUploadUrl()` / `createDownloadUrl()` for you, then PUT/fetch the file bytes to/from that URL.
 - `createUploadUrl()` / `createDownloadUrl()` are for when you need more control over the file transfer than `uploadFile()` / `downloadFile()` give you — e.g. tracking upload progress via `XMLHttpRequest`'s `upload.onprogress`.

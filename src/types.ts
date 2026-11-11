@@ -184,8 +184,6 @@ export type AppUser = {
   roles: AppUserRole[];
 };
 export type AppUserListParams = {
-  /** Include permanently soft-deleted users in results and count, default true. */
-  includeDeleted?: boolean;
   /** Maximum users per page: 1–1000, default 10. */
   top?: number;
   /** Number of matching users to skip, default 0. Independent of top. */
