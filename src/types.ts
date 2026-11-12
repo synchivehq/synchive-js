@@ -132,7 +132,7 @@ export type SyncHivePermissions = {
   policies: SyncHivePermissionPolicy[];
 };
 
-export type SyncHiveAccountStatus = "ENABLED" | "UNVERIFIED" | "DISABLED" | "DELETED";
+export type SyncHiveAccountStatus = "ENABLED" | "UNVERIFIED" | "DISABLED" | "REMOVED";
 
 export type SyncHiveAccount = {
   /** Unique ID of the App User account. */
@@ -177,7 +177,7 @@ export type AppUserRole = {
 export type AppUser = {
   /** Encoded account Hive ID, not a raw numeric ID or the owning Hive identifier. */
   hiveId: string;
-  /** Deleted accounts are permanently unavailable and have no roles. */
+  /** Removed accounts are permanently unavailable and have no roles. */
   status: SyncHiveAccountStatus;
   /** Assignments visible in this App Registration's Scope. */
   roles: AppUserRole[];
@@ -188,10 +188,10 @@ export type AppUserListParams = {
   /** Number of matching users to skip, default 0. Independent of top. */
   skip?: number;
   /**
-   * Filter by status using eq/ne with ENABLED, DISABLED, UNVERIFIED or DELETED,
+   * Filter by status using eq/ne with ENABLED, DISABLED, UNVERIFIED or REMOVED,
    * or by case-insensitive contains(email,'text'). Combine with and/or and parentheses.
    * Double apostrophes to escape them; email search text is limited to 320 characters.
-   * Role-member lists always exclude deleted accounts.
+   * Role-member lists always exclude removed accounts.
    */
   filter?: string;
 };
@@ -202,6 +202,7 @@ export type AppUserCollection = {
   /** Server-provided next-page URL. The SDK does not fetch it automatically. */
   nextLink?: string;
 };
+/** Delegated updates accept ENABLED or DISABLED; only Hive Admin management can set REMOVED. */
 export type AppUserUpdate = { status: "ENABLED" | "DISABLED" };
 export type SyncHiveRoleAssignment = { id: number; name: string };
 
