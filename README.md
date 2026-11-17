@@ -17,7 +17,9 @@ const synchive = new SyncHiveClient({
   publishableKey: "sh_publishable_v2_us-west-2_cHJvZDo6...",
 });
 
-// Initialize the client on every page load. This restores any saved session.
+// Call once after creating the client, before rendering UI that depends on auth state.
+// Restores any saved session, refreshing tokens when needed.
+// In the browser, also schedules background token refresh.
 await synchive.init();
 
 // Sign up: email the user a link to verificationPageUrl carrying a verification token.
@@ -164,34 +166,56 @@ try {
 
 ## Helpers
 
-Common
+### Setup and session
 
 - `init(): Promise<void>`
 - `onAuthStateChange(listener: AuthStateChangeListener): AuthStateChangeUnsubscribe` (returns a cleanup callback)
-- `signInWithPassword(credentials: { email: string; password: string }): Promise<void>`
+- `getCurrentUser(): Promise<SyncHiveUser | null>`
+- `signOut(): Promise<void>`
+
+### Sign-up and sign-in
+
 - `signUpWithPassword(signUp: { email: string; password: string; verificationPageUrl: string }): Promise<void>`
 - `completeRegistration(completion: { token: string; password?: string }): Promise<void>`
 - `resendVerification(resend: { email: string; verificationPageUrl: string }): Promise<void>`
-- `signOut(): Promise<void>`
+- `signInWithPassword(credentials: { email: string; password: string }): Promise<void>`
+
+### Passwords
+
 - `changePassword(change: { currentPassword: string; newPassword: string }): Promise<void>`
 - `requestPasswordReset(request: { email: string; passwordResetPageUrl: string }): Promise<void>`
 - `completePasswordReset(completion: { token: string; newPassword: string }): Promise<void>`
-- `list<T>(shape: string, params?: { top?: number; skip?: number; filter?: string; orderby?: string }): Promise<{ shapes: T[]; pagination: { totalItems?: number; totalPages?: number; pageNumber?: number; pageSize?: number } }>`
-- `get<T>(shape: string, hiveId: string): Promise<T>`
-- `create<T>(shape: string, payload: T): Promise<T>`
-- `update<T>(shape: string, hiveId: string, payload: Partial<T> | T): Promise<T>`
-- `uploadFile(file: File, options?: { fileHiveId?: string }): Promise<{ fileHiveId: string; uploadUrl: string; uploadToken: string; expiresOn: string }>`
-- `downloadFile(fileHiveId: string): Promise<{ fileHiveId: string; fileName: string; fileSize: number; contentType?: string; blob: Blob }>`
-- `deleteFile(fileHiveId: string): Promise<void>`
-- `getCurrentUser(): Promise<SyncHiveUser | null>`
+
+### Account (signed-in user)
+
 - `getAccount(): Promise<SyncHiveAccount>`
+- `getPermissions(): Promise<SyncHivePermissions>`
 - `requestEmailChange(request: { currentPassword: string; newEmail: string; verificationPageUrl: string }): Promise<EmailChangeRequestResult>`
 - `confirmEmailChange(completion: { token: string }): Promise<EmailChangeConfirmationResult>`
 - `deleteAccount(request: { currentPassword: string }): Promise<void>`
 
-User management
+### Data
 
-- `getPermissions(): Promise<SyncHivePermissions>`
+- `list<T>(shape: string, params?: { top?: number; skip?: number; filter?: string; orderby?: string }): Promise<{ shapes: T[]; pagination: { totalItems?: number; totalPages?: number; pageNumber?: number; pageSize?: number } }>`
+- `get<T>(shape: string, hiveId: string): Promise<T>`
+- `create<T>(shape: string, payload: T): Promise<T>`
+- `update<T>(shape: string, hiveId: string, payload: Partial<T> | T): Promise<T>`
+
+### Files
+
+- `uploadFile(file: File, options?: { fileHiveId?: string }): Promise<{ fileHiveId: string; uploadUrl: string; uploadToken: string; expiresOn: string }>`
+- `downloadFile(fileHiveId: string): Promise<{ fileHiveId: string; fileName: string; fileSize: number; contentType?: string; blob: Blob }>`
+- `deleteFile(fileHiveId: string): Promise<void>`
+
+#### Lower-level helpers
+
+- `createUploadUrl(payload: { fileName: string; contentType: string; fileSize: number; fileHiveId?: string }): Promise<{ fileHiveId: string; uploadUrl: string; uploadToken: string; expiresOn: string }>`
+- `createDownloadUrl(fileHiveId: string): Promise<{ fileHiveId: string; fileName: string; fileSize: number; contentType?: string; downloadUrl: string; expiresOn: string }>`
+
+### User management
+
+Requires SyncHive Roles to be enabled. Viewing users and assignments requires `VIEW` or `EDIT` permission; making changes requires `EDIT` permission.
+
 - `listAppUsers(params?: AppUserListParams): Promise<AppUserCollection>`
 - `getAppUser(accountHiveId: string): Promise<AppUser>`
 - `updateAppUser(accountHiveId: string, update: { status: "ENABLED" | "DISABLED" }): Promise<AppUser>`
@@ -200,11 +224,6 @@ User management
 - `removeAppUserRole(accountHiveId: string, roleId: number): Promise<void>`
 - `listAppRoles(params?: AppRoleListParams): Promise<AppRoleCollection>`
 - `listRoleMembers(roleId: number, params?: AppUserListParams): Promise<AppUserCollection>`
-
-Advanced
-
-- `createUploadUrl(payload: { fileName: string; contentType: string; fileSize: number; fileHiveId?: string }): Promise<{ fileHiveId: string; uploadUrl: string; uploadToken: string; expiresOn: string }>`
-- `createDownloadUrl(fileHiveId: string): Promise<{ fileHiveId: string; fileName: string; fileSize: number; contentType?: string; downloadUrl: string; expiresOn: string }>`
 
 ## Notes
 
