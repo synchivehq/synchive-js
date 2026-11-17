@@ -365,13 +365,14 @@ export class SyncHiveClient {
     });
   }
 
+  /** The payload must include a root hiveId matching the argument. Soft-deleted records return null. */
   async update<T>(
     shape: string,
     hiveId: string,
     payload: Partial<T> | T,
-  ): Promise<T> {
+  ): Promise<T | null> {
     const url = defaultBuildUpdateUrl(shape, hiveId, this.apiBaseUrl);
-    return this.request<T>(url, {
+    return this.request<T | null>(url, {
       method: "PATCH",
       body: JSON.stringify(payload),
     });

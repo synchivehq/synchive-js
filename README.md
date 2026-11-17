@@ -144,7 +144,10 @@ try {
     name: "Two-Slice Toaster",
     sku: "TOASTER-2S-BLK",
   });
+  // Updates require a root hiveId matching the ID passed to update().
+  // The payload can be either a partial shape or a full shape.
   const updated = await synchive.update("Product", "D6BFA0AB71A1", {
+    hiveId: "D6BFA0AB71A1",
     status: "discontinued",
   });
 } catch (error) {
@@ -199,7 +202,7 @@ try {
 - `list<T>(shape: string, params?: { top?: number; skip?: number; filter?: string; orderby?: string }): Promise<{ shapes: T[]; pagination: { totalItems?: number; totalPages?: number; pageNumber?: number; pageSize?: number } }>`
 - `get<T>(shape: string, hiveId: string): Promise<T>`
 - `create<T>(shape: string, payload: T): Promise<T>`
-- `update<T>(shape: string, hiveId: string, payload: Partial<T> | T): Promise<T>`
+- `update<T>(shape: string, hiveId: string, payload: Partial<T> | T): Promise<T | null>`
 
 ### Files
 
@@ -249,6 +252,7 @@ Requires SyncHive Roles to be enabled. Viewing users and assignments requires `V
 - With SyncHive Roles disabled, `getAccount()` still returns account details and `getPermissions()` returns `NONE` with empty Roles and Policies. User management methods require SyncHive Roles to be enabled. `VIEW` allows viewing users and assignments; `EDIT` allows changes. Protected Roles can only be assigned by their members.
 - `listAppUsers()` includes removed accounts by default in results and count. Use `listAppUsers({ filter: "status ne 'REMOVED'" })` to exclude them before counting and pagination, or `filter: "status eq 'REMOVED'"` to list only removed accounts. Status comparisons support `eq`/`ne` with `ENABLED`, `DISABLED`, `UNVERIFIED` or `REMOVED` (case-sensitive), and can be combined with `contains(email,'text')` using `and`, `or` and parentheses. `getAppUser()` can also retrieve retained removed identities. `AppUser.status` is `ENABLED`, `UNVERIFIED`, `DISABLED`, or `REMOVED`; removed users have `roles: []`. Use `updateAppUser(id, { status: "DISABLED" })` or `{ status: "ENABLED" }` to disable or enable a verified account. Disabling revokes its sessions and outstanding authentication links. Delegated SDK updates cannot enable or disable unverified accounts; verification determines when they become enabled. `updateAppUser()` accepts only `ENABLED` or `DISABLED`; setting `REMOVED` requires the Hive Admin management API. Removed accounts cannot be updated or assigned roles, and `listRoleMembers()` always excludes them. Delegated `deleteAppUser()` retains its existing behavior; hard deletion of retained removed accounts requires a Hive Admin in Connect.
 - HTTP failures from `getAccount()`, `getPermissions()` and user management methods throw the exported `SyncHiveManagementError` class, so callers can use `error instanceof SyncHiveManagementError`. It has `status` and optional `title`, `detail`, and `code` fields. Its message uses the response detail, then title, then body text, then a generic message. Authentication failures before the request and network failures propagate their original errors.
+- `update()` returns the updated shape, or `null` after soft deletion. To soft-delete a record, set `isDeleted: true` in the update payload; this requires soft deletion to be enabled on the shape.
 - `uploadFile()` / `downloadFile()` are convenience wrappers: they call `createUploadUrl()` / `createDownloadUrl()` for you, then PUT/fetch the file bytes to/from that URL.
 - `createUploadUrl()` / `createDownloadUrl()` are for when you need more control over the file transfer than `uploadFile()` / `downloadFile()` give you — e.g. tracking upload progress via `XMLHttpRequest`'s `upload.onprogress`.
 
