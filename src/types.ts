@@ -80,6 +80,10 @@ export type SyncHiveAuthErrorCode =
   | "superseded_password_reset_link"
   | "used_password_reset_link"
   | "expired_password_reset_link"
+  | "invalid_email_change_link"
+  | "superseded_email_change_link"
+  | "used_email_change_link"
+  | "expired_email_change_link"
   // Keeps codes the server adds later assignable without losing autocomplete.
   | (string & {});
 
@@ -128,6 +132,42 @@ export type SyncHivePermissions = {
   policies: SyncHivePermissionPolicy[];
 };
 
+export type SyncHiveAccountStatus = "ENABLED" | "UNVERIFIED" | "DISABLED" | "REMOVED";
+
+export type SyncHiveAccount = {
+  /** Unique ID of the App User account. */
+  hiveId: string;
+  email: string | null;
+  /** RFC 3339 email verification timestamp. */
+  verifiedAt: string | null;
+  status: SyncHiveAccountStatus;
+};
+
+export type SyncHiveAccountResponse = SyncHivePermissions & {
+  account: SyncHiveAccount;
+};
+
+export type EmailChangeRequest = {
+  currentPassword: string;
+  newEmail: string;
+  /** Must match one of the app's allowed URLs. */
+  verificationPageUrl: string;
+};
+
+export type EmailChangeRequestResult = { status: "VERIFICATION_REQUIRED" };
+
+export type EmailChangeConfirmation = {
+  /** The sh_email_change_token query parameter from the verification email. */
+  token: string;
+};
+
+export type EmailChangeConfirmationResult = {
+  status: "EMAIL_CHANGED";
+  requiresSignIn: true;
+};
+
+export type AccountDeletion = { currentPassword: string };
+
 export type AppUserRole = {
   id: number;
   name: string;
@@ -137,7 +177,8 @@ export type AppUserRole = {
 export type AppUser = {
   /** Encoded account Hive ID, not a raw numeric ID or the owning Hive identifier. */
   hiveId: string;
-  isEnabled: boolean;
+  /** Removed accounts are permanently unavailable and have no roles. */
+  status: SyncHiveAccountStatus;
   /** Assignments visible in this App Registration's Scope. */
   roles: AppUserRole[];
 };
@@ -146,7 +187,12 @@ export type AppUserListParams = {
   top?: number;
   /** Number of matching users to skip, default 0. Independent of top. */
   skip?: number;
-  /** Case-insensitive contains(email,'text'); double apostrophes to escape them. Search text is limited to 320 characters. */
+  /**
+   * Filter by status using eq/ne with ENABLED, DISABLED, UNVERIFIED or REMOVED,
+   * or by case-insensitive contains(email,'text'). Combine with and/or and parentheses.
+   * Double apostrophes to escape them; email search text is limited to 320 characters.
+   * Role-member lists always exclude removed accounts.
+   */
   filter?: string;
 };
 export type AppUserCollection = {
@@ -156,7 +202,8 @@ export type AppUserCollection = {
   /** Server-provided next-page URL. The SDK does not fetch it automatically. */
   nextLink?: string;
 };
-export type AppUserUpdate = { isEnabled: boolean };
+/** Delegated updates accept ENABLED or DISABLED; only Hive Admin management can set REMOVED. */
+export type AppUserUpdate = { status: "ENABLED" | "DISABLED" };
 export type SyncHiveRoleAssignment = { id: number; name: string };
 
 export type AppManagementRole = {
@@ -184,7 +231,7 @@ export type AppRoleCollection = {
   nextLink?: string;
 };
 
-/** HTTP failure returned by getPermissions() or the App User management APIs. */
+/** HTTP failure returned by getAccount(), getPermissions(), or the App User management APIs. */
 export class SyncHiveManagementError extends Error {
   readonly status: number;
   readonly title?: string;
